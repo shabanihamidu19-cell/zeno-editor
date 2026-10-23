@@ -73,19 +73,12 @@ jobs:
             size="${density_size##*:}"
             dir="android/app/src/main/res/mipmap-${density}"
             mkdir -p "$dir"
-            convert -background none -density 300 resources/icon.svg \
-              -resize "${size}x${size}" \
-              "$dir/ic_launcher.png"
+            convert -background none -density 300 resources/icon.svg -resize "${size}x${size}" "$dir/ic_launcher.png"
             cp "$dir/ic_launcher.png" "$dir/ic_launcher_round.png"
             cp "$dir/ic_launcher.png" "$dir/ic_launcher_foreground.png" 2>/dev/null || true
           done
           mkdir -p android/app/src/main/res/values
-          cat > android/app/src/main/res/values/ic_launcher_background.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="ic_launcher_background">#0E0E10</color>
-</resources>
-EOF
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<resources>' '    <color name="ic_launcher_background">#0E0E10</color>' '</resources>' > android/app/src/main/res/values/ic_launcher_background.xml
           mkdir -p src/assets/icon
           convert -background none -density 300 resources/icon.svg -resize 192x192 src/assets/icon/favicon.png || true
           convert -background none -density 300 resources/icon.svg -resize 512x512 src/assets/icon/logo.png || true
