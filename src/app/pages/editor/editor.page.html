@@ -1,8 +1,7 @@
 <div class="zeno-root">
-  <!-- TOP BAR -->
   <header class="topbar">
     <div class="topbar-left">
-      <button class="icon-btn" (click)="sidebarOpen = !sidebarOpen" title="Toggle Files">
+      <button class="icon-btn" (click)="sidebarOpen = !sidebarOpen" title="Files">
         <ion-icon name="folder-open-outline"></ion-icon>
       </button>
       <span class="project-name">{{ projectName }}</span>
@@ -21,7 +20,7 @@
       </div>
     </div>
     <div class="topbar-right">
-      <button class="icon-btn" (click)="saveCurrent()" title="Save (Ctrl+S)">
+      <button class="icon-btn" (click)="saveCurrent()" title="Save">
         <ion-icon name="save-outline"></ion-icon>
       </button>
       <button class="icon-btn run-btn" (click)="runCode()" title="Run">
@@ -30,7 +29,7 @@
       <button class="icon-btn" [class.active]="bottomPanel === 'preview'" (click)="togglePreview()" title="Preview">
         <ion-icon name="eye-outline"></ion-icon>
       </button>
-      <button class="icon-btn ai-btn" [class.active]="aiPanelOpen" (click)="toggleAiPanel()" title="Zeno AI">
+      <button class="icon-btn ai-btn" [class.active]="aiPanelOpen" (click)="toggleAiPanel()" title="AI">
         <ion-icon name="sparkles-outline"></ion-icon>
       </button>
       <button class="icon-btn" (click)="openSettings()" title="Settings">
@@ -42,14 +41,14 @@
   <div class="main-area">
     <aside class="sidebar" [class.collapsed]="!sidebarOpen">
       <div class="sidebar-header">
-        <button class="icon-btn sm" (click)="goUp()" [disabled]="!currentDir" title="Up">
+        <button class="icon-btn sm" (click)="goUp()" [disabled]="!currentDir">
           <ion-icon name="chevron-back-outline"></ion-icon>
         </button>
         <span class="dir-label">{{ currentDir || 'Files' }}</span>
-        <button class="icon-btn sm" (click)="openNewFileModal(false)" title="New File">
+        <button class="icon-btn sm" (click)="openNewFileModal(false)">
           <ion-icon name="add-outline"></ion-icon>
         </button>
-        <button class="icon-btn sm" (click)="openNewFileModal(true)" title="New Folder">
+        <button class="icon-btn sm" (click)="openNewFileModal(true)">
           <ion-icon name="folder-outline"></ion-icon>
         </button>
       </div>
@@ -73,6 +72,25 @@
           <ion-icon name="code-slash-outline"></ion-icon>
           <p>Open a file or create a new one</p>
           <button class="primary-btn" (click)="openNewFileModal(false)">New File</button>
+        </div>
+
+        <!-- Mobile cursor pad -->
+        <div class="cursor-pad" *ngIf="activeTabId">
+          <button class="pad-btn" (click)="moveCursor('up')" aria-label="Up">
+            <ion-icon name="chevron-up-outline"></ion-icon>
+          </button>
+          <div class="pad-mid">
+            <button class="pad-btn" (click)="moveCursor('left')" aria-label="Left">
+              <ion-icon name="chevron-back-outline"></ion-icon>
+            </button>
+            <button class="pad-btn home" (click)="moveCursor('home')" aria-label="Line start">Home</button>
+            <button class="pad-btn" (click)="moveCursor('right')" aria-label="Right">
+              <ion-icon name="chevron-forward-outline"></ion-icon>
+            </button>
+          </div>
+          <button class="pad-btn" (click)="moveCursor('down')" aria-label="Down">
+            <ion-icon name="chevron-down-outline"></ion-icon>
+          </button>
         </div>
       </div>
 
@@ -103,13 +121,13 @@
         <div class="ai-title">
           <ion-icon name="sparkles-outline"></ion-icon>
           Zeno AI
-          <span class="vision-badge" *ngIf="ai.visionActive$ | async">{{ selectedProvider | uppercase }}</span>
+          <span class="vision-badge">{{ selectedProvider | uppercase }}</span>
         </div>
         <div class="ai-actions">
-          <button class="icon-btn sm" [class.on]="autoDebug" (click)="toggleAutoDebug()" title="Auto Debug">
+          <button class="icon-btn sm" [class.on]="autoDebug" (click)="toggleAutoDebug()">
             <ion-icon name="bug-outline"></ion-icon>
           </button>
-          <button class="icon-btn sm" (click)="ai.clearChat()" title="Clear">
+          <button class="icon-btn sm" (click)="ai.clearChat()">
             <ion-icon name="refresh-outline"></ion-icon>
           </button>
           <button class="icon-btn sm" (click)="aiPanelOpen = false">
@@ -133,7 +151,7 @@
         </div>
       </div>
       <div class="ai-input-row">
-        <input type="text" [(ngModel)]="aiInput" placeholder="Ask Zeno anything..."
+        <input type="text" [(ngModel)]="aiInput" placeholder="Ask Zeno..."
                (keyup.enter)="sendAiMessage()" [disabled]="isAiProcessing" />
         <button class="send-btn" (click)="sendAiMessage()" [disabled]="isAiProcessing || !aiInput.trim()">
           <ion-icon name="sparkles-outline"></ion-icon>
@@ -143,7 +161,6 @@
   </div>
 </div>
 
-<!-- NEW FILE MODAL -->
 <ion-modal [isOpen]="showNewFileModal" (didDismiss)="showNewFileModal = false">
   <ng-template>
     <div class="modal-content dark-modal">
@@ -158,7 +175,6 @@
   </ng-template>
 </ion-modal>
 
-<!-- SETTINGS MODAL -->
 <ion-modal [isOpen]="settingsOpen" (didDismiss)="settingsOpen = false">
   <ng-template>
     <div class="modal-content dark-modal">
