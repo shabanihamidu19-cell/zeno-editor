@@ -24,19 +24,19 @@
 .topbar {
   display: flex;
   align-items: center;
-  height: 48px;
-  min-height: 48px;
+  height: 44px;
+  min-height: 44px;
   background: var(--zeno-panel);
   border-bottom: 1px solid var(--zeno-border);
-  padding: 0 8px;
-  gap: 8px;
+  padding: 0 6px;
+  gap: 4px;
   z-index: 20;
 }
 
 .topbar-left, .topbar-right {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
 }
 
@@ -44,13 +44,6 @@
   flex: 1;
   overflow: hidden;
   min-width: 0;
-}
-
-.project-name {
-  font-weight: 600;
-  font-size: 14px;
-  color: var(--zeno-accent);
-  white-space: nowrap;
 }
 
 .tabs-bar {
@@ -83,8 +76,8 @@
   .dirty { color: var(--zeno-accent); font-size: 10px; }
   .tab-close {
     background: none; border: none; color: var(--zeno-muted);
-    padding: 0; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
-    border-radius: 4px;
+    padding: 0; width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
     ion-icon { font-size: 14px; }
   }
 }
@@ -99,7 +92,6 @@
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  cursor: pointer;
   ion-icon { font-size: 20px; }
   &:active { background: var(--zeno-border); }
   &.active { color: var(--zeno-accent); }
@@ -126,11 +118,7 @@
   flex-direction: column;
   transition: width 0.15s, min-width 0.15s, opacity 0.15s;
   &.collapsed {
-    width: 0;
-    min-width: 0;
-    opacity: 0;
-    overflow: hidden;
-    border: none;
+    width: 0; min-width: 0; opacity: 0; overflow: hidden; border: none;
   }
 }
 
@@ -162,7 +150,6 @@
   align-items: center;
   gap: 8px;
   padding: 12px;
-  cursor: pointer;
   font-size: 14px;
   ion-icon {
     font-size: 18px;
@@ -172,8 +159,8 @@
   .fname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .del-btn {
     background: none; border: none; color: var(--zeno-muted);
-    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
-    border-radius: 6px;
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
     ion-icon { font-size: 16px; }
   }
   &:active { background: rgba(255,255,255,0.05); }
@@ -198,7 +185,7 @@
   flex: 1;
   position: relative;
   min-height: 0;
-  &.has-bottom { flex: 1 1 55%; }
+  &.has-bottom { flex: 1 1 50%; }
 }
 
 .monaco-container {
@@ -206,22 +193,27 @@
   height: 100%;
 }
 
-/* Force Monaco syntax colors visible on dark */
+/* Dense Spck-like Monaco */
 :host ::ng-deep {
   .monaco-editor, .monaco-editor-background, .monaco-editor .margin {
     background-color: #0e0e10 !important;
   }
-  .monaco-editor .mtk1 { color: #d4d4d4; }      /* default */
-  .monaco-editor .mtk5 { color: #ce9178; }      /* strings */
-  .monaco-editor .mtk6 { color: #569cd6; }      /* keywords */
-  .monaco-editor .mtk7 { color: #b5cea8; }      /* numbers */
-  .monaco-editor .mtk8 { color: #9cdcfe; }      /* identifiers */
-  .monaco-editor .mtk9 { color: #4ec9b0; }      /* types */
-  .monaco-editor .mtk10 { color: #dcdcaa; }     /* functions */
-  .monaco-editor .mtk11 { color: #c586c0; }     /* control keywords */
-  .monaco-editor .mtk12 { color: #6a9955; }     /* comments */
+  .monaco-editor .view-lines {
+    line-height: 22px !important;
+  }
+  .monaco-editor .view-line {
+    line-height: 22px !important;
+  }
+  .monaco-editor .mtk1 { color: #d4d4d4; }
+  .monaco-editor .mtk5 { color: #ce9178; }
+  .monaco-editor .mtk6 { color: #569cd6; }
+  .monaco-editor .mtk7 { color: #b5cea8; }
+  .monaco-editor .mtk8 { color: #9cdcfe; }
+  .monaco-editor .mtk9 { color: #4ec9b0; }
+  .monaco-editor .mtk10 { color: #dcdcaa; }
+  .monaco-editor .mtk11 { color: #c586c0; }
+  .monaco-editor .mtk12 { color: #6a9955; }
   .monaco-editor .cursor { background: #00ff88 !important; border-color: #00ff88 !important; }
-  .monaco-editor .focused .selected-text { background: rgba(0,255,136,0.2); }
 }
 
 .empty-editor {
@@ -237,59 +229,64 @@
   p { margin: 0; font-size: 15px; }
 }
 
-/* Cursor navigation pad */
-.cursor-pad {
-  position: absolute;
-  right: 10px;
-  bottom: 12px;
-  z-index: 15;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  background: rgba(26, 26, 30, 0.92);
-  border: 1px solid var(--zeno-border);
-  border-radius: 14px;
-  padding: 6px;
-  backdrop-filter: blur(8px);
+/* Spck-style symbol toolbar */
+.symbol-bar {
+  background: #151518;
+  border-top: 1px solid var(--zeno-border);
+  flex-shrink: 0;
 }
 
-.pad-mid {
+.sym-scroll {
   display: flex;
-  gap: 4px;
-  align-items: center;
+  overflow-x: auto;
+  gap: 2px;
+  padding: 6px 8px 2px;
+  -webkit-overflow-scrolling: touch;
+  &::-webkit-scrollbar { height: 0; }
 }
 
-.pad-btn {
-  width: 40px;
-  height: 40px;
+.sym {
+  flex-shrink: 0;
+  min-width: 34px;
+  height: 34px;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
+  background: #25252c;
+  color: var(--zeno-text);
+  font-size: 15px;
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+  &:active { background: var(--zeno-accent); color: #000; }
+}
+
+.nav-row {
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px 8px;
+  justify-content: center;
+}
+
+.nav {
+  flex: 1;
+  max-width: 56px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
   background: #25252c;
   color: var(--zeno-text);
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
-  ion-icon { font-size: 20px; }
-  &:active {
-    background: var(--zeno-accent);
-    color: #000;
-  }
-  &.home {
-    width: auto;
-    min-width: 48px;
-    padding: 0 8px;
-    font-size: 10px;
-  }
+  ion-icon { font-size: 18px; }
+  &:active { background: var(--zeno-accent); color: #000; }
 }
 
 .bottom-panel {
-  height: 36%;
-  min-height: 140px;
-  max-height: 45%;
+  height: 32%;
+  min-height: 120px;
+  max-height: 40%;
   background: var(--zeno-panel);
   border-top: 1px solid var(--zeno-border);
   display: flex;
@@ -313,7 +310,6 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    cursor: pointer;
     ion-icon { font-size: 14px; }
     &.active { color: var(--zeno-accent); background: rgba(0,255,136,0.1); }
   }
@@ -324,13 +320,12 @@
 .terminal-view {
   flex: 1;
   overflow: auto;
-  -webkit-overflow-scrolling: touch;
   pre {
     margin: 0;
     padding: 12px;
     font-family: ui-monospace, monospace;
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.45;
     color: #b0b0b0;
     white-space: pre-wrap;
     word-break: break-all;
@@ -339,7 +334,6 @@
 
 .preview-view {
   flex: 1;
-  position: relative;
   .preview-iframe {
     width: 100%;
     height: 100%;
@@ -357,10 +351,7 @@
   flex-direction: column;
   transition: width 0.2s, min-width 0.2s;
   overflow: hidden;
-  &.open {
-    width: 300px;
-    min-width: 280px;
-  }
+  &.open { width: 300px; min-width: 280px; }
 }
 
 .ai-header {
@@ -383,7 +374,6 @@
     color: var(--zeno-accent);
     padding: 2px 6px;
     border-radius: 4px;
-    letter-spacing: 0.5px;
   }
   .ai-actions { display: flex; gap: 2px; }
 }
@@ -395,7 +385,6 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  -webkit-overflow-scrolling: touch;
 }
 
 .msg {
@@ -408,14 +397,8 @@
     white-space: pre-wrap;
     word-break: break-word;
   }
-  &.user {
-    align-self: flex-end;
-    .msg-content { background: #2a3a2a; border-bottom-right-radius: 4px; }
-  }
-  &.assistant {
-    align-self: flex-start;
-    .msg-content { background: #222228; border-bottom-left-radius: 4px; }
-  }
+  &.user { align-self: flex-end; .msg-content { background: #2a3a2a; } }
+  &.assistant { align-self: flex-start; .msg-content { background: #222228; } }
 }
 
 .fix-card {
@@ -497,14 +480,8 @@
     border-radius: 8px;
     padding: 12px;
     font-size: 14px;
-    outline: none;
   }
-  .hint {
-    font-size: 11px;
-    color: var(--zeno-muted);
-    margin-top: 8px;
-    a { color: var(--zeno-accent); }
-  }
+  .hint { font-size: 11px; color: var(--zeno-muted); margin-top: 8px; a { color: var(--zeno-accent); } }
   .modal-actions {
     display: flex;
     gap: 12px;
@@ -538,9 +515,7 @@
     width: 100%;
     min-width: 100%;
     position: absolute;
-    right: 0; top: 0; bottom: 0;
+    inset: 0;
     z-index: 40;
   }
-  .project-name { display: none; }
-  .cursor-pad { bottom: 16px; right: 8px; }
 }
