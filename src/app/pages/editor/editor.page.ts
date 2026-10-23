@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit, NgZone } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, AsyncPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonIcon,
@@ -16,7 +16,7 @@ import {
   codeSlashOutline, refreshOutline, downloadOutline, folderOpenOutline,
   ellipsisVerticalOutline, checkmarkOutline, bugOutline
 } from 'ionicons/icons';
-import * as monaco from 'monaco-editor';
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import { FilesystemService, FileEntry } from '../../services/filesystem.service';
 import { AiVisionService, AiContext, AiMessage, AiFix } from '../../services/ai-vision.service';
 import { Subscription } from 'rxjs';
@@ -37,7 +37,7 @@ interface EditorTab {
   styleUrls: ['./editor.page.scss'],
   standalone: true,
   imports: [
-    CommonModule, FormsModule,
+    CommonModule, AsyncPipe, FormsModule,
     IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonIcon,
     IonContent, IonList, IonItem, IonLabel, IonInput, IonTextarea,
     IonFab, IonFabButton, IonModal, IonToggle, IonBadge, IonChip,
@@ -103,7 +103,6 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
       this.ai.autoDebugMode$.subscribe(a => this.autoDebug = a)
     );
 
-    // Seed demo project if empty
     const list = await this.fs.listFiles();
     if (list.length === 0) {
       await this.createDemoProject();
@@ -124,57 +123,15 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private async createDemoProject() {
-    await this.fs.createFile('index.html', `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zeno Demo</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <h1>Welcome to Zeno Editor</h1>
-  <p>AI-Powered Code Editor</p>
-  <button id="btn">Click me</button>
-  <script src="app.js"></script>
-</body>
-</html>`);
-    await this.fs.createFile('style.css', `body {
-  font-family: system-ui, sans-serif;
-  background: #0e0e10;
-  color: #e0e0e0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  margin: 0;
-}
-h1 { color: #00ff88; }
-button {
-  background: #00ff88;
-  color: #000;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 16px;
-  cursor: pointer;
-}`);
-    await this.fs.createFile('app.js', `document.getElementById('btn').addEventListener('click', () => {
-  alert('Hello from Zeno Editor!');
-  console.log('Button clicked at', new Date().toISOString());
-});`);
-    await this.fs.createFile('main.py', `print("Hello from Zeno Python!")
-for i in range(5):
-    print(f"Count: {i}")
-`);
+    await this.fs.createFile('index.html', `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>Zeno Demo</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>Welcome to Zeno Editor</h1>\n  <p>AI-Powered Code Editor</p>\n  <button id="btn">Click me</button>\n  <script src="app.js"></script>\n</body>\n</html>`);
+    await this.fs.createFile('style.css', `body {\n  font-family: system-ui, sans-serif;\n  background: #0e0e10;\n  color: #e0e0e0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  min-height: 100vh;\n  margin: 0;\n}\nh1 { color: #00ff88; }\nbutton {\n  background: #00ff88;\n  color: #000;\n  border: none;\n  padding: 12px 24px;\n  border-radius: 8px;\n  font-size: 16px;\n  cursor: pointer;\n}`);
+    await this.fs.createFile('app.js', `document.getElementById('btn').addEventListener('click', () => {\n  alert('Hello from Zeno Editor!');\n  console.log('Button clicked at', new Date().toISOString());\n});`);
+    await this.fs.createFile('main.py', `print("Hello from Zeno Python!")\nfor i in range(5):\n    print(f"Count: {i}")\n`);
   }
 
   private initMonaco() {
     if (!this.editorContainer?.nativeElement) return;
 
-    // Configure Monaco paths for workers
-    // Monaco workers via CDN fallback
     (self as any).MonacoEnvironment = {
       getWorkerUrl: function (_moduleId: string, label: string) {
         const base = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs';
@@ -217,12 +174,10 @@ for i in range(5):
       }
     });
 
-    // Keyboard save
     this.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       this.saveCurrent();
     });
 
-    // Open first file if any
     if (this.files.length && !this.tabs.length) {
       const first = this.files.find(f => !f.isDirectory);
       if (first) this.openFile(first);
@@ -254,7 +209,6 @@ for i in range(5):
       await this.refreshFiles();
       return;
     }
-    // Already open?
     let tab = this.tabs.find(t => t.path === entry.path);
     if (tab) {
       this.activateTab(tab.id);
@@ -282,7 +236,6 @@ for i in range(5):
     if (!tab.model) {
       tab.model = monaco.editor.createModel(tab.content, tab.language);
     } else {
-      // sync content if needed
       if (tab.model.getValue() !== tab.content) {
         tab.model.setValue(tab.content);
       }
@@ -297,7 +250,6 @@ for i in range(5):
     if (idx === -1) return;
     const tab = this.tabs[idx];
     if (tab.dirty) {
-      // simple auto-save on close for mobile UX
       this.saveTab(tab);
     }
     tab.model?.dispose();
@@ -349,7 +301,6 @@ for i in range(5):
           text: 'Delete', role: 'destructive',
           handler: async () => {
             await this.fs.deleteFile(entry.path);
-            // close tab if open
             const tab = this.tabs.find(t => t.path === entry.path);
             if (tab) this.closeTab(tab.id);
             await this.refreshFiles();
@@ -403,7 +354,6 @@ for i in range(5):
     this.refreshFiles();
   }
 
-  // ========== PREVIEW ==========
   isPreviewable(tab: EditorTab | null): boolean {
     if (!tab) return false;
     return ['html', 'htm', 'css', 'js'].includes(tab.path.split('.').pop()?.toLowerCase() || '');
@@ -421,12 +371,10 @@ for i in range(5):
   async updatePreview() {
     const tab = this.getActiveTab();
     if (!tab) return;
-    // Build combined HTML
     let html = '';
     let css = '';
     let js = '';
 
-    // Find related files in project
     const all = await this.fs.getAllProjectFiles(this.currentDir || '');
     for (const f of all) {
       const ext = f.path.split('.').pop()?.toLowerCase();
@@ -443,8 +391,6 @@ for i in range(5):
       html = `<html><body><pre>${tab.content}</pre></body></html>`;
     }
 
-
-    // Inject css/js
     if (css) {
       html = html.replace('</head>', `<style>${css}</style></head>`);
       if (!html.includes('</head>')) html = `<style>${css}</style>` + html;
@@ -467,7 +413,6 @@ for i in range(5):
     }, 50);
   }
 
-  // ========== TERMINAL / RUN ==========
   async runCode() {
     const tab = this.getActiveTab();
     if (!tab) return;
@@ -482,7 +427,6 @@ for i in range(5):
           logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
           originalLog.apply(console, args);
         };
-        // eslint-disable-next-line no-eval
         const result = eval(tab.content);
         console.log = originalLog;
         if (logs.length) this.terminalOutput += logs.join('\n') + '\n';
@@ -499,7 +443,6 @@ for i in range(5):
     } else {
       this.terminalOutput += `Cannot execute ${tab.language} files directly.\n`;
     }
-    // scroll terminal
   }
 
   private async loadPyodide() {
@@ -511,7 +454,6 @@ for i in range(5):
         this.pyodideReady = true;
         this.terminalOutput += 'Pyodide ready.\n';
       } else {
-        // load script
         const script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js';
         script.onload = async () => {
@@ -558,7 +500,6 @@ for i in range(5):
     this.terminalOutput = '';
   }
 
-  // ========== AI ==========
   toggleAiPanel() {
     this.aiPanelOpen = !this.aiPanelOpen;
   }
@@ -591,7 +532,6 @@ for i in range(5):
     if (!this.lastFix || !this.editor) return;
     const tab = this.getActiveTab();
     if (!tab || tab.path !== this.lastFix.file) {
-      // try find tab
       const t = this.tabs.find(x => x.path === this.lastFix!.file);
       if (t) this.activateTab(t.id);
     }
