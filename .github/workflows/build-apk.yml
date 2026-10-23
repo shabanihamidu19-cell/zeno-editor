@@ -60,10 +60,14 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Install ImageMagick
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq imagemagick
+
       - name: Apply Zeno app icon (neon Z)
         run: |
           set -e
-          # Generate launcher icons from resources/icon.svg
           for density_size in "mdpi:48" "hdpi:72" "xhdpi:96" "xxhdpi:144" "xxxhdpi:192"; do
             density="${density_size%%:*}"
             size="${density_size##*:}"
@@ -75,19 +79,18 @@ jobs:
             cp "$dir/ic_launcher.png" "$dir/ic_launcher_round.png"
             cp "$dir/ic_launcher.png" "$dir/ic_launcher_foreground.png" 2>/dev/null || true
           done
-          # Adaptive icon background (dark)
           mkdir -p android/app/src/main/res/values
           cat > android/app/src/main/res/values/ic_launcher_background.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="ic_launcher_background">#0E0E10</color>
-          </resources>
-          EOF
-          # Also update web favicon if present
-          mkdir -p www/assets/icon src/assets/icon
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#0E0E10</color>
+</resources>
+EOF
+          mkdir -p src/assets/icon
           convert -background none -density 300 resources/icon.svg -resize 192x192 src/assets/icon/favicon.png || true
           convert -background none -density 300 resources/icon.svg -resize 512x512 src/assets/icon/logo.png || true
           echo "Icons applied."
+          ls -la android/app/src/main/res/mipmap-*/ic_launcher.png
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
