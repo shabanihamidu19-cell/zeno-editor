@@ -7,13 +7,14 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build",
+    "build": "ng build --configuration production",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "lint": "ng lint",
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
-    "build:android": "ng build && npx cap sync android"
+    "build:android": "npm run build && npx cap sync android",
+    "postinstall": "echo 'Ready - run npm start or GitHub Actions for APK'"
   },
   "private": true,
   "dependencies": {
