@@ -30,8 +30,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # Google removed the deprecated "tools" package. v3 fails with:
-      # "Failed to find package 'tools'". Use v4 + explicit packages.
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
         with:
@@ -50,7 +48,6 @@ jobs:
 
       - name: Prepare Android platform
         run: |
-          # Remove incomplete android scaffold if present (only Manifest was committed)
           if [ -d android ] && [ ! -f android/app/build.gradle ]; then
             echo "Removing incomplete android folder..."
             rm -rf android
@@ -62,6 +59,35 @@ jobs:
 
       - name: Sync Capacitor
         run: npx cap sync android
+
+      - name: Apply Zeno app icon (neon Z)
+        run: |
+          set -e
+          # Generate launcher icons from resources/icon.svg
+          for density_size in "mdpi:48" "hdpi:72" "xhdpi:96" "xxhdpi:144" "xxxhdpi:192"; do
+            density="${density_size%%:*}"
+            size="${density_size##*:}"
+            dir="android/app/src/main/res/mipmap-${density}"
+            mkdir -p "$dir"
+            convert -background none -density 300 resources/icon.svg \
+              -resize "${size}x${size}" \
+              "$dir/ic_launcher.png"
+            cp "$dir/ic_launcher.png" "$dir/ic_launcher_round.png"
+            cp "$dir/ic_launcher.png" "$dir/ic_launcher_foreground.png" 2>/dev/null || true
+          done
+          # Adaptive icon background (dark)
+          mkdir -p android/app/src/main/res/values
+          cat > android/app/src/main/res/values/ic_launcher_background.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="ic_launcher_background">#0E0E10</color>
+          </resources>
+          EOF
+          # Also update web favicon if present
+          mkdir -p www/assets/icon src/assets/icon
+          convert -background none -density 300 resources/icon.svg -resize 192x192 src/assets/icon/favicon.png || true
+          convert -background none -density 300 resources/icon.svg -resize 512x512 src/assets/icon/logo.png || true
+          echo "Icons applied."
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
@@ -77,8 +103,6 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
 
-      # Optional: create a GitHub Release. Requires contents:write (set above).
-      # continue-on-error so a release permission issue never fails the APK job.
       - name: Upload to GitHub Release (on main push)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         continue-on-error: true
