@@ -2,23 +2,29 @@ import { Component, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit, NgZ
 import { CommonModule, AsyncPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
-  IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonIcon,
-  IonContent, IonList, IonItem, IonLabel, IonInput, IonTextarea,
-  IonFab, IonFabButton, IonModal, IonToggle, IonBadge, IonChip,
-  IonSplitPane, IonMenu, IonMenuToggle, ToastController, AlertController,
-  IonSegment, IonSegmentButton, IonFooter, IonSpinner
+  IonIcon, IonInput, IonModal, IonSpinner,
+  ToastController, AlertController
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import {
-  folderOutline, documentOutline, addOutline, trashOutline, createOutline,
+  folderOutline, documentOutline, addOutline, trashOutline,
   playOutline, saveOutline, sparklesOutline, terminalOutline, eyeOutline,
-  chevronBackOutline, chevronForwardOutline, settingsOutline, closeOutline,
-  codeSlashOutline, refreshOutline, downloadOutline, folderOpenOutline,
-  ellipsisVerticalOutline, checkmarkOutline, bugOutline
+  chevronBackOutline, chevronForwardOutline, chevronUpOutline, chevronDownOutline,
+  settingsOutline, closeOutline, codeSlashOutline, refreshOutline,
+  folderOpenOutline, checkmarkOutline, bugOutline
 } from 'ionicons/icons';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+// Language contributions for syntax highlighting colors
+import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution';
+import 'monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution';
+import 'monaco-editor/esm/vs/basic-languages/python/python.contribution';
+import 'monaco-editor/esm/vs/basic-languages/html/html.contribution';
+import 'monaco-editor/esm/vs/basic-languages/css/css.contribution';
+import 'monaco-editor/esm/vs/basic-languages/xml/xml.contribution';
+import 'monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution';
+import 'monaco-editor/esm/vs/language/json/monaco.contribution';
 import { FilesystemService, FileEntry } from '../../services/filesystem.service';
-import { AiVisionService, AiContext, AiMessage, AiFix } from '../../services/ai-vision.service';
+import { AiVisionService, AiContext, AiMessage, AiFix, AI_PROVIDERS, AiProvider } from '../../services/ai-vision.service';
 import { Subscription } from 'rxjs';
 
 interface EditorTab {
@@ -38,10 +44,7 @@ interface EditorTab {
   standalone: true,
   imports: [
     CommonModule, AsyncPipe, FormsModule,
-    IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonIcon,
-    IonContent, IonList, IonItem, IonLabel, IonInput, IonTextarea,
-    IonFab, IonFabButton, IonModal, IonToggle, IonBadge, IonChip,
-    IonSegment, IonSegmentButton, IonFooter, IonSpinner
+    IonIcon, IonInput, IonModal, IonSpinner
   ]
 })
 export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
@@ -55,14 +58,17 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
   currentDir = '';
   projectName = 'My Project';
   sidebarOpen = true;
-  bottomPanel: 'terminal' | 'preview' | 'none' = 'terminal';
+  bottomPanel: 'terminal' | 'preview' | 'none' = 'none';
   terminalOutput = '';
   previewHtml = '';
   aiPanelOpen = false;
   aiInput = '';
   settingsOpen = false;
   apiKeyInput = '';
-  apiEndpointInput = 'https://api.openai.com/v1/chat/completions';
+  geminiKeyInput = '';
+  selectedProvider: AiProvider = 'groq';
+  selectedModel = AI_PROVIDERS.groq.defaultModel;
+  availableModels: string[] = AI_PROVIDERS.groq.models;
   autoDebug = false;
   isAiProcessing = false;
   messages: AiMessage[] = [];
@@ -75,7 +81,6 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
 
   private subs: Subscription[] = [];
   private contentChangeDisposable: monaco.IDisposable | null = null;
-  private markerDisposable: monaco.IDisposable | null = null;
 
   constructor(
     private fs: FilesystemService,
@@ -85,17 +90,21 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
     private zone: NgZone
   ) {
     addIcons({
-      folderOutline, documentOutline, addOutline, trashOutline, createOutline,
+      folderOutline, documentOutline, addOutline, trashOutline,
       playOutline, saveOutline, sparklesOutline, terminalOutline, eyeOutline,
-      chevronBackOutline, chevronForwardOutline, settingsOutline, closeOutline,
-      codeSlashOutline, refreshOutline, downloadOutline, folderOpenOutline,
-      ellipsisVerticalOutline, checkmarkOutline, bugOutline
+      chevronBackOutline, chevronForwardOutline, chevronUpOutline, chevronDownOutline,
+      settingsOutline, closeOutline, codeSlashOutline, refreshOutline,
+      folderOpenOutline, checkmarkOutline, bugOutline
     });
   }
 
   async ngOnInit() {
     await this.fs.init();
     await this.refreshFiles();
+    this.selectedProvider = this.ai.getProvider();
+    this.selectedModel = this.ai.getModel();
+    this.availableModels = AI_PROVIDERS[this.selectedProvider].models;
+
     this.subs.push(
       this.ai.messages$.subscribe(m => this.messages = m),
       this.ai.isProcessing$.subscribe(p => this.isAiProcessing = p),
@@ -111,29 +120,27 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit() {
-    setTimeout(() => this.initMonaco(), 100);
-    this.loadPyodide();
+    setTimeout(() => this.initMonaco(), 150);
   }
 
   ngOnDestroy() {
     this.subs.forEach(s => s.unsubscribe());
     this.contentChangeDisposable?.dispose();
-    this.markerDisposable?.dispose();
     this.editor?.dispose();
   }
 
   private async createDemoProject() {
     await this.fs.createFile('index.html', `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>Zeno Demo</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>Welcome to Zeno Editor</h1>\n  <p>AI-Powered Code Editor</p>\n  <button id="btn">Click me</button>\n  <script src="app.js"></script>\n</body>\n</html>`);
-    await this.fs.createFile('style.css', `body {\n  font-family: system-ui, sans-serif;\n  background: #0e0e10;\n  color: #e0e0e0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  min-height: 100vh;\n  margin: 0;\n}\nh1 { color: #00ff88; }\nbutton {\n  background: #00ff88;\n  color: #000;\n  border: none;\n  padding: 12px 24px;\n  border-radius: 8px;\n  font-size: 16px;\n  cursor: pointer;\n}`);
-    await this.fs.createFile('app.js', `document.getElementById('btn').addEventListener('click', () => {\n  alert('Hello from Zeno Editor!');\n  console.log('Button clicked at', new Date().toISOString());\n});`);
-    await this.fs.createFile('main.py', `print("Hello from Zeno Python!")\nfor i in range(5):\n    print(f"Count: {i}")\n`);
+    await this.fs.createFile('style.css', `body {\n  font-family: system-ui, sans-serif;\n  background: #0e0e10;\n  color: #e0e0e0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  min-height: 100vh;\n  margin: 0;\n}\nh1 { color: #00ff88; }\nbutton {\n  background: #00ff88;\n  color: #000;\n  border: none;\n  padding: 12px 24px;\n  border-radius: 8px;\n  font-size: 16px;\n}`);
+    await this.fs.createFile('app.js', `// Click handler\nconst btn = document.getElementById('btn');\nbtn.addEventListener('click', () => {\n  alert('Hello from Zeno!');\n  console.log('clicked', new Date().toISOString());\n});\n`);
+    await this.fs.createFile('main.py', `# Python demo\nprint("Hello from Zeno Python!")\nfor i in range(5):\n    print(f"Count: {i}")\n`);
   }
 
   private initMonaco() {
     if (!this.editorContainer?.nativeElement) return;
 
     (self as any).MonacoEnvironment = {
-      getWorkerUrl: function (_moduleId: string, label: string) {
+      getWorkerUrl: (_moduleId: string, label: string) => {
         const base = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs';
         if (label === 'json') return base + '/language/json/json.worker.js';
         if (label === 'css' || label === 'scss' || label === 'less') return base + '/language/css/css.worker.js';
@@ -143,23 +150,46 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
       }
     };
 
+    // Lightweight options for mobile performance
     this.editor = monaco.editor.create(this.editorContainer.nativeElement, {
       theme: 'vs-dark',
       automaticLayout: true,
-      minimap: { enabled: true },
-      fontSize: 14,
+      minimap: { enabled: false },
+      fontSize: 15,
       lineNumbers: 'on',
-      roundedSelection: true,
+      lineNumbersMinChars: 3,
+      roundedSelection: false,
       scrollBeyondLastLine: false,
       readOnly: false,
       cursorStyle: 'line',
+      cursorBlinking: 'solid',
       wordWrap: 'on',
       tabSize: 2,
-      renderWhitespace: 'selection',
-      suggestOnTriggerCharacters: true,
-      quickSuggestions: true,
-      folding: true,
-      glyphMargin: true
+      renderWhitespace: 'none',
+      renderLineHighlight: 'line',
+      occurrencesHighlight: 'off' as any,
+      selectionHighlight: false,
+      matchBrackets: 'near',
+      folding: false,
+      glyphMargin: false,
+      overviewRulerLanes: 0,
+      hideCursorInOverviewRuler: true,
+      overviewRulerBorder: false,
+      scrollbar: {
+        verticalScrollbarSize: 8,
+        horizontalScrollbarSize: 8,
+        useShadows: false
+      },
+      suggestOnTriggerCharacters: false,
+      quickSuggestions: false,
+      parameterHints: { enabled: false },
+      hover: { enabled: false },
+      links: false,
+      contextmenu: false,
+      smoothScrolling: false,
+      mouseWheelZoom: false,
+      dragAndDrop: false,
+      padding: { top: 8, bottom: 80 }
     });
 
     this.contentChangeDisposable = this.editor.onDidChangeModelContent(() => {
@@ -168,9 +198,6 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
         tab.content = this.editor.getValue();
         tab.dirty = true;
         this.ai.onEditorContentChange(() => this.buildContext());
-        if (this.bottomPanel === 'preview' && this.isPreviewable(tab)) {
-          this.updatePreview();
-        }
       }
     });
 
@@ -184,12 +211,58 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  /** Move cursor for mobile (no physical keyboard arrows) */
+  moveCursor(dir: 'up' | 'down' | 'left' | 'right' | 'home') {
+    if (!this.editor) return;
+    const pos = this.editor.getPosition();
+    if (!pos) return;
+    const model = this.editor.getModel();
+    if (!model) return;
+
+    let { lineNumber, column } = pos;
+    const maxLine = model.getLineCount();
+
+    switch (dir) {
+      case 'up':
+        lineNumber = Math.max(1, lineNumber - 1);
+        column = Math.min(column, model.getLineMaxColumn(lineNumber));
+        break;
+      case 'down':
+        lineNumber = Math.min(maxLine, lineNumber + 1);
+        column = Math.min(column, model.getLineMaxColumn(lineNumber));
+        break;
+      case 'left':
+        if (column > 1) column -= 1;
+        else if (lineNumber > 1) {
+          lineNumber -= 1;
+          column = model.getLineMaxColumn(lineNumber);
+        }
+        break;
+      case 'right': {
+        const maxCol = model.getLineMaxColumn(lineNumber);
+        if (column < maxCol) column += 1;
+        else if (lineNumber < maxLine) {
+          lineNumber += 1;
+          column = 1;
+        }
+        break;
+      }
+      case 'home':
+        column = 1;
+        break;
+    }
+
+    this.editor.setPosition({ lineNumber, column });
+    this.editor.revealPositionInCenterIfOutsideViewport({ lineNumber, column });
+    this.editor.focus();
+  }
+
   private getLanguage(path: string): string {
     const ext = path.split('.').pop()?.toLowerCase() || '';
     const map: Record<string, string> = {
       html: 'html', htm: 'html',
       css: 'css', scss: 'scss',
-      js: 'javascript', mjs: 'javascript',
+      js: 'javascript', mjs: 'javascript', cjs: 'javascript',
       ts: 'typescript', tsx: 'typescript',
       json: 'json',
       py: 'python',
@@ -215,7 +288,7 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
     const content = await this.fs.readFile(entry.path);
-    const id = 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    const id = 'tab_' + Date.now();
     tab = {
       id,
       path: entry.path,
@@ -235,12 +308,15 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
 
     if (!tab.model) {
       tab.model = monaco.editor.createModel(tab.content, tab.language);
-    } else {
-      if (tab.model.getValue() !== tab.content) {
-        tab.model.setValue(tab.content);
-      }
+    } else if (tab.model.getValue() !== tab.content) {
+      tab.model.setValue(tab.content);
     }
     this.editor.setModel(tab.model);
+    // Ensure cursor starts at a sensible place, not jumping randomly
+    const pos = this.editor.getPosition();
+    if (!pos || pos.lineNumber < 1) {
+      this.editor.setPosition({ lineNumber: 1, column: 1 });
+    }
     this.editor.focus();
   }
 
@@ -249,15 +325,12 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
     const idx = this.tabs.findIndex(t => t.id === id);
     if (idx === -1) return;
     const tab = this.tabs[idx];
-    if (tab.dirty) {
-      this.saveTab(tab);
-    }
+    if (tab.dirty) this.saveTab(tab);
     tab.model?.dispose();
     this.tabs.splice(idx, 1);
     if (this.activeTabId === id) {
       if (this.tabs.length) {
-        const next = this.tabs[Math.min(idx, this.tabs.length - 1)];
-        this.activateTab(next.id);
+        this.activateTab(this.tabs[Math.min(idx, this.tabs.length - 1)].id);
       } else {
         this.activeTabId = null;
         this.editor?.setModel(null);
@@ -271,8 +344,7 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
 
   async saveCurrent() {
     const tab = this.getActiveTab();
-    if (!tab) return;
-    await this.saveTab(tab);
+    if (tab) await this.saveTab(tab);
   }
 
   async saveTab(tab: EditorTab) {
@@ -282,12 +354,6 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
     await this.fs.writeFile(tab.path, tab.content);
     tab.dirty = false;
     this.showToast('Saved ' + tab.name);
-  }
-
-  async saveAll() {
-    for (const tab of this.tabs) {
-      await this.saveTab(tab);
-    }
   }
 
   async deleteEntry(entry: FileEntry, event: Event) {
@@ -324,8 +390,7 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
     if (this.isFolder) {
       await this.fs.createFolder(path);
     } else {
-      const content = this.getTemplate(this.newFileName);
-      await this.fs.createFile(path, content);
+      await this.fs.createFile(path, this.getTemplate(this.newFileName));
     }
     this.showNewFileModal = false;
     await this.refreshFiles();
@@ -337,12 +402,12 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
 
   private getTemplate(name: string): string {
     const ext = name.split('.').pop()?.toLowerCase();
-    if (ext === 'html') return '<!DOCTYPE html>\n<html>\n<head>\n  <title>New Page</title>\n</head>\n<body>\n  \n</body>\n</html>';
+    if (ext === 'html') return '<!DOCTYPE html>\n<html>\n<head>\n  <title>New</title>\n</head>\n<body>\n\n</body>\n</html>\n';
     if (ext === 'css') return '/* styles */\n';
     if (ext === 'js') return '// JavaScript\n';
     if (ext === 'ts') return '// TypeScript\n';
     if (ext === 'py') return '# Python\nprint("Hello")\n';
-    if (ext === 'json') return '{\n  \n}\n';
+    if (ext === 'json') return '{\n}\n';
     return '';
   }
 
@@ -361,7 +426,7 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
 
   togglePreview() {
     if (this.bottomPanel === 'preview') {
-      this.bottomPanel = 'terminal';
+      this.bottomPanel = 'none';
     } else {
       this.bottomPanel = 'preview';
       this.updatePreview();
@@ -374,32 +439,26 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
     let html = '';
     let css = '';
     let js = '';
-
     const all = await this.fs.getAllProjectFiles(this.currentDir || '');
     for (const f of all) {
       const ext = f.path.split('.').pop()?.toLowerCase();
       if (ext === 'html' || ext === 'htm') {
         if (f.path === tab.path || !html) html = f.content;
-      } else if (ext === 'css') {
-        css += f.content + '\n';
-      } else if (ext === 'js') {
-        js += f.content + '\n';
-      }
+      } else if (ext === 'css') css += f.content + '\n';
+      else if (ext === 'js') js += f.content + '\n';
     }
     if (!html && tab.language === 'html') html = tab.content;
-    if (!html) {
-      html = `<html><body><pre>${tab.content}</pre></body></html>`;
-    }
-
+    if (!html) html = `<html><body><pre>${tab.content}</pre></body></html>`;
     if (css) {
-      html = html.replace('</head>', `<style>${css}</style></head>`);
-      if (!html.includes('</head>')) html = `<style>${css}</style>` + html;
+      html = html.includes('</head>')
+        ? html.replace('</head>', `<style>${css}</style></head>`)
+        : `<style>${css}</style>` + html;
     }
     if (js) {
-      html = html.replace('</body>', `<script>${js}</script></body>`);
-      if (!html.includes('</body>')) html += `<script>${js}</script>`;
+      html = html.includes('</body>')
+        ? html.replace('</body>', `<script>${js}</script></body>`)
+        : html + `<script>${js}</script>`;
     }
-    this.previewHtml = html;
     setTimeout(() => {
       const iframe = this.previewFrame?.nativeElement;
       if (iframe) {
@@ -410,7 +469,7 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
           doc.close();
         }
       }
-    }, 50);
+    }, 40);
   }
 
   async runCode() {
@@ -431,78 +490,57 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
         console.log = originalLog;
         if (logs.length) this.terminalOutput += logs.join('\n') + '\n';
         if (result !== undefined) this.terminalOutput += '=> ' + String(result) + '\n';
-        this.terminalOutput += 'Process finished\n';
+        this.terminalOutput += 'Done\n';
       } catch (e: any) {
         this.terminalOutput += 'Error: ' + (e.message || e) + '\n';
       }
     } else if (tab.language === 'python') {
       await this.runPython(tab.content);
     } else if (tab.language === 'html') {
-      this.togglePreview();
-      this.terminalOutput += 'Opened live preview\n';
+      this.bottomPanel = 'preview';
+      this.updatePreview();
+      this.terminalOutput += 'Opened preview\n';
     } else {
-      this.terminalOutput += `Cannot execute ${tab.language} files directly.\n`;
+      this.terminalOutput += `Cannot run ${tab.language}\n`;
     }
   }
 
   private async loadPyodide() {
     try {
-      if ((window as any).loadPyodide) {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js';
+      script.onload = async () => {
         this.pyodide = await (window as any).loadPyodide({
           indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.23.4/full/'
         });
         this.pyodideReady = true;
-        this.terminalOutput += 'Pyodide ready.\n';
-      } else {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js';
-        script.onload = async () => {
-          this.pyodide = await (window as any).loadPyodide({
-            indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.23.4/full/'
-          });
-          this.pyodideReady = true;
-          this.zone.run(() => {
-            this.terminalOutput += 'Pyodide ready.\n';
-          });
-        };
-        document.head.appendChild(script);
-      }
+        this.zone.run(() => { this.terminalOutput += 'Pyodide ready.\n'; });
+      };
+      document.head.appendChild(script);
     } catch (e) {
-      console.error('Pyodide load failed', e);
-      this.terminalOutput += 'Pyodide failed to load (offline?).\n';
+      this.terminalOutput += 'Pyodide failed.\n';
     }
   }
 
   private async runPython(code: string) {
-    if (!this.pyodideReady || !this.pyodide) {
-      this.terminalOutput += 'Pyodide not ready yet. Wait a moment.\n';
+    if (!this.pyodideReady) {
+      if (!this.pyodide) this.loadPyodide();
+      this.terminalOutput += 'Pyodide loading... try again in a few seconds.\n';
       return;
     }
     try {
-      this.pyodide.setStdout({
-        batched: (msg: string) => {
-          this.zone.run(() => { this.terminalOutput += msg + '\n'; });
-        }
-      });
-      this.pyodide.setStderr({
-        batched: (msg: string) => {
-          this.zone.run(() => { this.terminalOutput += 'ERR: ' + msg + '\n'; });
-        }
-      });
+      this.pyodide.setStdout({ batched: (msg: string) => this.zone.run(() => { this.terminalOutput += msg + '\n'; }) });
+      this.pyodide.setStderr({ batched: (msg: string) => this.zone.run(() => { this.terminalOutput += 'ERR: ' + msg + '\n'; }) });
       await this.pyodide.runPythonAsync(code);
-      this.terminalOutput += 'Process finished\n';
+      this.terminalOutput += 'Done\n';
     } catch (e: any) {
       this.terminalOutput += 'Python Error: ' + (e.message || e) + '\n';
     }
   }
 
-  clearTerminal() {
-    this.terminalOutput = '';
-  }
+  clearTerminal() { this.terminalOutput = ''; }
 
-  toggleAiPanel() {
-    this.aiPanelOpen = !this.aiPanelOpen;
-  }
+  toggleAiPanel() { this.aiPanelOpen = !this.aiPanelOpen; }
 
   buildContext(): AiContext {
     const tab = this.getActiveTab();
@@ -511,7 +549,7 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
       markers = monaco.editor.getModelMarkers({ resource: tab.model.uri });
     }
     return {
-      context: 'Full project file list',
+      context: 'Full project',
       currentFile: tab?.path || '',
       currentCode: tab?.content || this.editor?.getValue() || '',
       errorMarkers: markers,
@@ -524,14 +562,12 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
     if (!this.aiInput.trim() || this.isAiProcessing) return;
     const msg = this.aiInput.trim();
     this.aiInput = '';
-    const ctx = this.buildContext();
-    await this.ai.askAi(msg, ctx);
+    await this.ai.askAi(msg, this.buildContext());
   }
 
   async applyFix() {
     if (!this.lastFix || !this.editor) return;
-    const tab = this.getActiveTab();
-    if (!tab || tab.path !== this.lastFix.file) {
+    if (this.getActiveTab()?.path !== this.lastFix.file) {
       const t = this.tabs.find(x => x.path === this.lastFix!.file);
       if (t) this.activateTab(t.id);
     }
@@ -553,23 +589,37 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
     this.showToast(this.autoDebug ? 'Auto Debug OFF' : 'Auto Debug ON');
   }
 
+  onProviderChange(p: AiProvider) {
+    this.selectedProvider = p;
+    this.availableModels = AI_PROVIDERS[p].models;
+    this.selectedModel = AI_PROVIDERS[p].defaultModel;
+  }
+
   openSettings() {
+    this.selectedProvider = this.ai.getProvider();
+    this.selectedModel = this.ai.getModel();
+    this.availableModels = AI_PROVIDERS[this.selectedProvider].models;
     this.apiKeyInput = localStorage.getItem('zeno_ai_key') || '';
-    this.apiEndpointInput = localStorage.getItem('zeno_ai_endpoint') || 'https://api.openai.com/v1/chat/completions';
+    this.geminiKeyInput = localStorage.getItem('zeno_gemini_key') || '';
     this.settingsOpen = true;
   }
 
   saveSettings() {
-    this.ai.setApiKey(this.apiKeyInput);
-    this.ai.setApiEndpoint(this.apiEndpointInput);
+    this.ai.setProvider(this.selectedProvider);
+    this.ai.setModel(this.selectedModel);
+    if (this.selectedProvider === 'gemini') {
+      this.ai.setGeminiKey(this.geminiKeyInput);
+    } else {
+      this.ai.setApiKey(this.apiKeyInput);
+    }
     this.settingsOpen = false;
-    this.showToast('Settings saved');
+    this.showToast(`Saved: ${this.selectedProvider} / ${this.selectedModel}`);
   }
 
   private async showToast(msg: string) {
     const t = await this.toast.create({
       message: msg,
-      duration: 2000,
+      duration: 1800,
       position: 'bottom',
       color: 'dark',
       cssClass: 'zeno-toast'
