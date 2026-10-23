@@ -65,25 +65,35 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq imagemagick
 
-      - name: Apply Zeno app icon (neon Z)
+      - name: Apply Zeno app icon from icon.jpg
         run: |
           set -e
+          # Prefer the uploaded photo logo
+          if [ -f resources/icon.jpg ]; then
+            SRC=resources/icon.jpg
+          elif [ -f resources/icon.png ]; then
+            SRC=resources/icon.png
+          else
+            SRC=resources/icon.svg
+          fi
+          echo "Using icon source: $SRC"
+          # Square crop + resize for each density
           for density_size in "mdpi:48" "hdpi:72" "xhdpi:96" "xxhdpi:144" "xxxhdpi:192"; do
             density="${density_size%%:*}"
             size="${density_size##*:}"
             dir="android/app/src/main/res/mipmap-${density}"
             mkdir -p "$dir"
-            convert -background none -density 300 resources/icon.svg -resize "${size}x${size}" "$dir/ic_launcher.png"
+            convert "$SRC" -resize "${size}x${size}^" -gravity center -extent "${size}x${size}" "$dir/ic_launcher.png"
             cp "$dir/ic_launcher.png" "$dir/ic_launcher_round.png"
             cp "$dir/ic_launcher.png" "$dir/ic_launcher_foreground.png" 2>/dev/null || true
           done
           mkdir -p android/app/src/main/res/values
           printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<resources>' '    <color name="ic_launcher_background">#0E0E10</color>' '</resources>' > android/app/src/main/res/values/ic_launcher_background.xml
           mkdir -p src/assets/icon
-          convert -background none -density 300 resources/icon.svg -resize 192x192 src/assets/icon/favicon.png || true
-          convert -background none -density 300 resources/icon.svg -resize 512x512 src/assets/icon/logo.png || true
-          echo "Icons applied."
-          ls -la android/app/src/main/res/mipmap-*/ic_launcher.png
+          convert "$SRC" -resize 192x192^ -gravity center -extent 192x192 src/assets/icon/favicon.png || true
+          convert "$SRC" -resize 512x512^ -gravity center -extent 512x512 src/assets/icon/logo.png || true
+          echo "Icons applied from $SRC"
+          ls -la android/app/src/main/res/mipmap-xxxhdpi/
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
