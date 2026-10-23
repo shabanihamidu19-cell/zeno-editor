@@ -20,7 +20,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          # no cache: package-lock.json is not committed yet
 
       - name: Setup Java
         uses: actions/setup-java@v4
