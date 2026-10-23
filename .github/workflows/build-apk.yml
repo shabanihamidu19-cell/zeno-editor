@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build Zeno Editor APK
@@ -74,8 +77,11 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
 
+      # Optional: create a GitHub Release. Requires contents:write (set above).
+      # continue-on-error so a release permission issue never fails the APK job.
       - name: Upload to GitHub Release (on main push)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
