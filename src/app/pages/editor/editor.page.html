@@ -39,7 +39,8 @@
         <div class="file-item" *ngFor="let f of files" (click)="openFile(f)">
           <ion-icon [name]="f.isDirectory ? 'folder-outline' : 'document-outline'" [class.folder]="f.isDirectory"></ion-icon>
           <span class="fname">{{ f.name }}</span>
-          <button class="del-btn" (click)="deleteEntry(f, $event)"><ion-icon name="trash-outline"></ion-icon></button>
+          <button class="del-btn" (click)="deleteEntry(f, $event)"><ion-icon name="trash-outline"></ion-icon>
+          </button>
         </div>
         <div class="empty" *ngIf="!files.length">No files yet</div>
       </div>
@@ -55,13 +56,12 @@
         </div>
       </div>
 
-      <!-- Spck-style symbol + nav bar -->
       <div class="symbol-bar" *ngIf="activeTabId">
         <div class="sym-scroll">
           <button type="button" class="sym" *ngFor="let s of symbols" (click)="insertSymbol(s)">{{ s }}</button>
         </div>
         <div class="nav-row">
-          <button type="button" class="nav" (click)="moveCursor('home')">⇥|</button>
+          <button type="button" class="nav" (click)="moveCursor('home')">|</button>
           <button type="button" class="nav" (click)="moveCursor('up')"><ion-icon name="chevron-up-outline"></ion-icon></button>
           <button type="button" class="nav" (click)="moveCursor('down')"><ion-icon name="chevron-down-outline"></ion-icon></button>
           <button type="button" class="nav" (click)="moveCursor('left')"><ion-icon name="chevron-back-outline"></ion-icon></button>
@@ -71,39 +71,66 @@
 
       <div class="bottom-panel" *ngIf="bottomPanel !== 'none'">
         <div class="bottom-tabs">
-          <button [class.active]="bottomPanel === 'terminal'" (click)="bottomPanel = 'terminal'"><ion-icon name="terminal-outline"></ion-icon> Terminal</button>
-          <button [class.active]="bottomPanel === 'preview'" (click)="bottomPanel = 'preview'; updatePreview()"><ion-icon name="eye-outline"></ion-icon> Preview</button>
+          <button [class.active]="bottomPanel === 'terminal'" (click)="bottomPanel = 'terminal'">
+            <ion-icon name="terminal-outline"></ion-icon> Terminal
+          </button>
+          <button [class.active]="bottomPanel === 'preview'" (click)="bottomPanel = 'preview'; updatePreview()">
+            <ion-icon name="eye-outline"></ion-icon> Preview
+          </button>
           <button class="clear-btn" *ngIf="bottomPanel === 'terminal'" (click)="clearTerminal()">Clear</button>
-          <button class="close-bottom" (click)="bottomPanel = 'none'"><ion-icon name="close-outline"></ion-icon></button>
+          <button class="close-bottom" (click)="bottomPanel = 'none'">
+            <ion-icon name="close-outline"></ion-icon>
+          </button>
         </div>
-        <div class="terminal-view" *ngIf="bottomPanel === 'terminal"><pre>{{ terminalOutput || 'Ready.' }}</pre></div>
-        <div class="preview-view" *ngIf="bottomPanel === 'preview"><iframe #previewFrame class="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe></div>
+        <div class="terminal-view" *ngIf="bottomPanel === 'terminal'">
+          <pre>{{ terminalOutput || 'Ready.' }}</pre>
+        </div>
+        <div class="preview-view" *ngIf="bottomPanel === 'preview'">
+          <iframe #previewFrame class="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
       </div>
     </div>
 
     <aside class="ai-panel" [class.open]="aiPanelOpen">
       <div class="ai-header">
-        <div class="ai-title"><ion-icon name="sparkles-outline"></ion-icon> Zeno AI <span class="vision-badge">{{ selectedProvider | uppercase }}</span></div>
+        <div class="ai-title">
+          <ion-icon name="sparkles-outline"></ion-icon>
+          Zeno AI
+          <span class="vision-badge">{{ selectedProvider | uppercase }}</span>
+        </div>
         <div class="ai-actions">
-          <button class="icon-btn sm" [class.on]="autoDebug" (click)="toggleAutoDebug()"><ion-icon name="bug-outline"></ion-icon></button>
-          <button class="icon-btn sm" (click)="ai.clearChat()"><ion-icon name="refresh-outline"></ion-icon></button>
-          <button class="icon-btn sm" (click)="aiPanelOpen = false"><ion-icon name="close-outline"></ion-icon></button>
+          <button class="icon-btn sm" [class.on]="autoDebug" (click)="toggleAutoDebug()">
+            <ion-icon name="bug-outline"></ion-icon>
+          </button>
+          <button class="icon-btn sm" (click)="ai.clearChat()">
+            <ion-icon name="refresh-outline"></ion-icon>
+          </button>
+          <button class="icon-btn sm" (click)="aiPanelOpen = false">
+            <ion-icon name="close-outline"></ion-icon>
+          </button>
         </div>
       </div>
       <div class="ai-messages">
         <div class="msg" *ngFor="let m of messages" [class.user]="m.role === 'user'" [class.assistant]="m.role === 'assistant'">
           <div class="msg-content">{{ m.content }}</div>
         </div>
-        <div class="msg assistant" *ngIf="isAiProcessing"><ion-spinner name="crescent"></ion-spinner> Thinking...</div>
+        <div class="msg assistant" *ngIf="isAiProcessing">
+          <ion-spinner name="crescent"></ion-spinner> Thinking...
+        </div>
         <div class="fix-card" *ngIf="lastFix">
           <div class="fix-title">Fix: {{ lastFix.file }}</div>
           <div class="fix-expl">{{ lastFix.explanation }}</div>
-          <button class="apply-btn" (click)="applyFix()"><ion-icon name="checkmark-outline"></ion-icon> Apply Fix</button>
+          <button class="apply-btn" (click)="applyFix()">
+            <ion-icon name="checkmark-outline"></ion-icon> Apply Fix
+          </button>
         </div>
       </div>
       <div class="ai-input-row">
-        <input type="text" [(ngModel)]="aiInput" placeholder="Ask Zeno..." (keyup.enter)="sendAiMessage()" [disabled]="isAiProcessing" />
-        <button class="send-btn" (click)="sendAiMessage()" [disabled]="isAiProcessing || !aiInput.trim()"><ion-icon name="sparkles-outline"></ion-icon></button>
+        <input type="text" [(ngModel)]="aiInput" placeholder="Ask Zeno..."
+               (keyup.enter)="sendAiMessage()" [disabled]="isAiProcessing" />
+        <button class="send-btn" (click)="sendAiMessage()" [disabled]="isAiProcessing || !aiInput.trim()">
+          <ion-icon name="sparkles-outline"></ion-icon>
+        </button>
       </div>
     </aside>
   </div>
@@ -113,7 +140,9 @@
   <ng-template>
     <div class="modal-content dark-modal">
       <h2>{{ isFolder ? 'New Folder' : 'New File' }}</h2>
-      <ion-input [(ngModel)]="newFileName" [placeholder]="isFolder ? 'folder-name' : 'filename.js'" (keyup.enter)="createNew()"></ion-input>
+      <ion-input [(ngModel)]="newFileName"
+                 [placeholder]="isFolder ? 'folder-name' : 'filename.js'"
+                 (keyup.enter)="createNew()"></ion-input>
       <div class="modal-actions">
         <button class="cancel" (click)="showNewFileModal = false">Cancel</button>
         <button class="primary-btn" (click)="createNew()">Create</button>
@@ -128,7 +157,7 @@
       <h2>Zeno AI Settings</h2>
       <label>Provider</label>
       <select class="zeno-select" [(ngModel)]="selectedProvider" (ngModelChange)="onProviderChange($event)">
-        <option value="groq">Groq (default – free & fast)</option>
+        <option value="groq">Groq (default - free and fast)</option>
         <option value="gemini">Google Gemini (free)</option>
         <option value="openai">OpenAI / Compatible</option>
       </select>
@@ -138,13 +167,18 @@
       </select>
       <ng-container *ngIf="selectedProvider === 'groq' || selectedProvider === 'openai'">
         <label>{{ selectedProvider === 'groq' ? 'Groq API Key' : 'API Key' }}</label>
-        <ion-input type="password" [(ngModel)]="apiKeyInput" [placeholder]="selectedProvider === 'groq' ? 'gsk_...' : 'sk-...'"></ion-input>
-        <p class="hint" *ngIf="selectedProvider === 'groq'">Free: <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a></p>
+        <ion-input type="password" [(ngModel)]="apiKeyInput"
+                   [placeholder]="selectedProvider === 'groq' ? 'gsk_...' : 'sk-'"></ion-input>
+        <p class="hint" *ngIf="selectedProvider === 'groq'">
+          Free: <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>
+        </p>
       </ng-container>
       <ng-container *ngIf="selectedProvider === 'gemini'">
         <label>Gemini API Key</label>
         <ion-input type="password" [(ngModel)]="geminiKeyInput" placeholder="AIza..."></ion-input>
-        <p class="hint">Free: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></p>
+        <p class="hint">
+          Free: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
+        </p>
       </ng-container>
       <div class="modal-actions">
         <button class="cancel" (click)="settingsOpen = false">Cancel</button>
