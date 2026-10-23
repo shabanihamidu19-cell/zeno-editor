@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject } from 'rxjs';
 import { FilesystemService } from './filesystem.service';
+
+export type AiProvider = 'groq' | 'gemini' | 'openai';
 
 export interface AiContext {
   context: string;
@@ -26,29 +28,81 @@ export interface AiFix {
   explanation: string;
 }
 
+export const AI_PROVIDERS: Record<AiProvider, { label: string; endpoint: string; models: string[]; defaultModel: string; free?: boolean }> = {
+  groq: {
+    label: 'Groq (default, free tier)',
+    endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
+    defaultModel: 'llama-3.3-70b-versatile',
+    free: true
+  },
+  gemini: {
+    label: 'Google Gemini (free)',
+    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
+    models: ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'],
+    defaultModel: 'gemini-2.0-flash',
+    free: true
+  },
+  openai: {
+    label: 'OpenAI / Compatible',
+    endpoint: 'https://api.openai.com/v1/chat/completions',
+    models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
+    defaultModel: 'gpt-4o-mini'
+  }
+};
+
 @Injectable({
   providedIn: 'root'
 })
 export class AiVisionService {
   private apiKey = '';
-  private apiEndpoint = 'https://api.openai.com/v1/chat/completions';
-  private model = 'gpt-4o-mini';
+  private geminiKey = '';
+  private provider: AiProvider = 'groq';
+  private model = AI_PROVIDERS.groq.defaultModel;
 
   autoDebugMode$ = new BehaviorSubject<boolean>(false);
   messages$ = new BehaviorSubject<AiMessage[]>([]);
   isProcessing$ = new BehaviorSubject<boolean>(false);
   lastFix$ = new BehaviorSubject<AiFix | null>(null);
   visionActive$ = new BehaviorSubject<boolean>(true);
+  provider$ = new BehaviorSubject<AiProvider>('groq');
 
-  private contentChangeSubject = new Subject<void>();
   private debounceTimer: any;
 
   constructor(private fs: FilesystemService) {
-    // Load saved API key
-    const saved = localStorage.getItem('zeno_ai_key');
-    if (saved) this.apiKey = saved;
-    const endpoint = localStorage.getItem('zeno_ai_endpoint');
-    if (endpoint) this.apiEndpoint = endpoint;
+    this.apiKey = localStorage.getItem('zeno_ai_key') || '';
+    this.geminiKey = localStorage.getItem('zeno_gemini_key') || '';
+    const p = localStorage.getItem('zeno_ai_provider') as AiProvider;
+    if (p && AI_PROVIDERS[p]) {
+      this.provider = p;
+      this.provider$.next(p);
+    }
+    const m = localStorage.getItem('zeno_ai_model');
+    if (m) this.model = m;
+    else this.model = AI_PROVIDERS[this.provider].defaultModel;
+  }
+
+  getProvider(): AiProvider {
+    return this.provider;
+  }
+
+  getModel(): string {
+    return this.model;
+  }
+
+  setProvider(p: AiProvider): void {
+    this.provider = p;
+    this.provider$.next(p);
+    localStorage.setItem('zeno_ai_provider', p);
+    // reset model to provider default if current model not in list
+    if (!AI_PROVIDERS[p].models.includes(this.model)) {
+      this.setModel(AI_PROVIDERS[p].defaultModel);
+    }
+  }
+
+  setModel(m: string): void {
+    this.model = m;
+    localStorage.setItem('zeno_ai_model', m);
   }
 
   setApiKey(key: string): void {
@@ -56,13 +110,14 @@ export class AiVisionService {
     localStorage.setItem('zeno_ai_key', key);
   }
 
-  setApiEndpoint(url: string): void {
-    this.apiEndpoint = url;
-    localStorage.setItem('zeno_ai_endpoint', url);
+  setGeminiKey(key: string): void {
+    this.geminiKey = key;
+    localStorage.setItem('zeno_gemini_key', key);
   }
 
-  getApiKey(): string {
-    return this.apiKey ? '••••' + this.apiKey.slice(-4) : '';
+  getApiKeyMasked(): string {
+    const k = this.provider === 'gemini' ? this.geminiKey : this.apiKey;
+    return k ? '••••' + k.slice(-4) : '';
   }
 
   toggleAutoDebug(): void {
@@ -77,16 +132,14 @@ export class AiVisionService {
     }, 1500);
   }
 
-  // ========== LAYER 1: OFFLINE LINTER & AUTO-FIX ==========
+  // ========== LAYER 1: OFFLINE LINTER ==========
   runOfflineLinter(ctx: AiContext): { fixed: boolean; message: string; newCode?: string } {
     const code = ctx.currentCode;
     const file = ctx.currentFile || '';
     const ext = file.split('.').pop()?.toLowerCase() || '';
-
     let result = { fixed: false, message: '', newCode: code };
 
-    // Generic bracket / paren / brace balancer
-    const openers = { '(': ')', '[': ']', '{': '}' };
+    const openers: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
     const stack: string[] = [];
     let inString = false;
     let stringChar = '';
@@ -96,44 +149,25 @@ export class AiVisionService {
     for (let i = 0; i < code.length; i++) {
       const ch = code[i];
       const next = code[i + 1];
-
-      if (inLineComment) {
-        if (ch === '\n') inLineComment = false;
-        continue;
-      }
-      if (inComment) {
-        if (ch === '*' && next === '/') { inComment = false; i++; }
-        continue;
-      }
+      if (inLineComment) { if (ch === '\n') inLineComment = false; continue; }
+      if (inComment) { if (ch === '*' && next === '/') { inComment = false; i++; } continue; }
       if (inString) {
         if (ch === '\\') { i++; continue; }
         if (ch === stringChar) inString = false;
         continue;
       }
-
       if (ch === '/' && next === '/') { inLineComment = true; i++; continue; }
       if (ch === '/' && next === '*') { inComment = true; i++; continue; }
-      if (ch === '"' || ch === "'" || ch === '`') {
-        inString = true;
-        stringChar = ch;
-        continue;
-      }
-
-      if (ch in openers) stack.push((openers as any)[ch]);
+      if (ch === '"' || ch === "'" || ch === '`') { inString = true; stringChar = ch; continue; }
+      if (ch in openers) stack.push(openers[ch]);
       else if (Object.values(openers).includes(ch)) {
         if (stack.length && stack[stack.length - 1] === ch) stack.pop();
-        else {
-          // mismatch - could try to fix but risky
-        }
       }
     }
 
-    // Auto close missing braces/brackets at end of file for JS/TS/JSON/CSS
     if (stack.length > 0 && ['js', 'ts', 'tsx', 'jsx', 'json', 'css', 'html'].includes(ext)) {
       let addition = '';
-      while (stack.length) {
-        addition += stack.pop();
-      }
+      while (stack.length) addition += stack.pop();
       if (addition) {
         result.newCode = code + '\n' + addition;
         result.fixed = true;
@@ -142,23 +176,11 @@ export class AiVisionService {
       }
     }
 
-    // HTML unclosed tags (simple)
-    if (ext === 'html' || ext === 'htm') {
-      const openTags = (code.match(/<([a-zA-Z][a-zA-Z0-9]*)[^>]*>(?![^<]*<\/\1>)/g) || [])
-        .map(t => t.match(/<([a-zA-Z][a-zA-Z0-9]*)/)?.[1])
-        .filter(Boolean) as string[];
-      const selfClosing = new Set(['img', 'br', 'hr', 'input', 'meta', 'link', 'area', 'base', 'col', 'embed', 'source', 'track', 'wbr']);
-      const unclosed = openTags.filter(t => !selfClosing.has(t.toLowerCase()));
-      // Very simplistic - only suggest, don't auto close complex HTML
-    }
-
-    // Python indentation / colon check (basic)
     if (ext === 'py') {
       const lines = code.split('\n');
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
         if (/^(def|class|if|elif|else|for|while|try|except|finally|with)\b/.test(line) && !line.endsWith(':') && !line.endsWith('\\')) {
-          // missing colon
           lines[i] = lines[i].replace(/\s*$/, ':');
           result.newCode = lines.join('\n');
           result.fixed = true;
@@ -167,22 +189,6 @@ export class AiVisionService {
         }
       }
     }
-
-    // JS/TS missing semicolons for simple statements (conservative)
-    if (['js', 'ts'].includes(ext)) {
-      // Only fix obvious like "let x = 1" at end of line without ;
-      // Skip for now to avoid false positives
-    }
-
-    // Use Monaco markers if provided
-    if (ctx.errorMarkers && ctx.errorMarkers.length > 0) {
-      const first = ctx.errorMarkers[0];
-      const msg = first.message || '';
-      if (msg.includes("'}' expected") || msg.includes("')' expected") || msg.includes("']' expected")) {
-        // already handled by stack
-      }
-    }
-
     return result;
   }
 
@@ -194,7 +200,6 @@ export class AiVisionService {
     this.messages$.next([...messages]);
 
     try {
-      // Always run offline first
       const offline = this.runOfflineLinter(ctx);
       if (offline.fixed && offline.newCode) {
         this.lastFix$.next({
@@ -210,19 +215,22 @@ export class AiVisionService {
         return reply;
       }
 
-      if (!this.apiKey) {
-        const reply = 'No API key configured. Go to Settings (gear icon) and paste an OpenAI-compatible API key. Offline linter found no auto-fixable issues.';
+      const key = this.provider === 'gemini' ? this.geminiKey : this.apiKey;
+      if (!key) {
+        const which = this.provider === 'gemini' ? 'Gemini' : 'Groq/OpenAI';
+        const reply = `No ${which} API key set. Open Settings (gear) and paste your free API key.`;
         messages.push({ role: 'assistant', content: reply, timestamp: Date.now() });
         this.messages$.next([...messages]);
         this.isProcessing$.next(false);
         return reply;
       }
 
-      // Gather full vision
       let allFilesSummary = '';
       try {
         const all = await this.fs.getAllProjectFiles();
-        allFilesSummary = all.map(f => `// FILE: ${f.path}\n${f.content.slice(0, 2000)}${f.content.length > 2000 ? '\n...[truncated]' : ''}`).join('\n\n');
+        allFilesSummary = all
+          .map(f => `// FILE: ${f.path}\n${f.content.slice(0, 2000)}${f.content.length > 2000 ? '\n...[truncated]' : ''}`)
+          .join('\n\n');
       } catch {
         allFilesSummary = '(could not read project files)';
       }
@@ -236,43 +244,26 @@ Format fixes as:
 \`\`\`
 Explain briefly what you changed.`;
 
-      const visionPayload = {
-        currentFile: ctx.currentFile,
-        currentCode: ctx.currentCode,
-        errorMarkers: ctx.errorMarkers,
-        terminalOutput: ctx.terminalOutput,
-        projectFiles: allFilesSummary.slice(0, 12000),
-        userGoal: ctx.userGoal || userMessage
-      };
+      const visionText = `VISION CONTEXT:
+currentFile: ${ctx.currentFile}
+errorMarkers: ${JSON.stringify(ctx.errorMarkers?.slice(0, 10) || [])}
+terminalOutput: ${(ctx.terminalOutput || '').slice(-1500)}
 
-      const body = {
-        model: this.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: `VISION CONTEXT:\n${JSON.stringify(visionPayload, null, 2)}\n\nUSER REQUEST: ${userMessage}` }
-        ],
-        temperature: 0.2,
-        max_tokens: 4096
-      };
+CURRENT CODE:
+${ctx.currentCode}
 
-      const resp = await fetch(this.apiEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify(body)
-      });
+PROJECT FILES (truncated):
+${allFilesSummary.slice(0, 10000)}
 
-      if (!resp.ok) {
-        const errText = await resp.text();
-        throw new Error(`API ${resp.status}: ${errText.slice(0, 200)}`);
+USER REQUEST: ${userMessage}`;
+
+      let reply = '';
+      if (this.provider === 'gemini') {
+        reply = await this.callGemini(key, systemPrompt, visionText);
+      } else {
+        reply = await this.callOpenAICompatible(key, systemPrompt, visionText);
       }
 
-      const data = await resp.json();
-      const reply = data.choices?.[0]?.message?.content || 'No response from AI';
-
-      // Try extract code block for fix
       const codeMatch = reply.match(/```(?:\w+)?\n([\s\S]*?)```/);
       if (codeMatch && codeMatch[1] && ctx.currentCode) {
         this.lastFix$.next({
@@ -288,12 +279,69 @@ Explain briefly what you changed.`;
       this.isProcessing$.next(false);
       return reply;
     } catch (e: any) {
-      const errMsg = `AI Error: ${e.message || e}`;
+      const errMsg = `AI Error (${this.provider}): ${e.message || e}`;
       messages.push({ role: 'assistant', content: errMsg, timestamp: Date.now() });
       this.messages$.next([...messages]);
       this.isProcessing$.next(false);
       return errMsg;
     }
+  }
+
+  private async callOpenAICompatible(key: string, systemPrompt: string, userContent: string): Promise<string> {
+    const endpoint = AI_PROVIDERS[this.provider].endpoint;
+    const body = {
+      model: this.model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent }
+      ],
+      temperature: 0.2,
+      max_tokens: 4096
+    };
+
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`${resp.status}: ${errText.slice(0, 300)}`);
+    }
+    const data = await resp.json();
+    return data.choices?.[0]?.message?.content || 'No response from AI';
+  }
+
+  private async callGemini(key: string, systemPrompt: string, userContent: string): Promise<string> {
+    const model = this.model || 'gemini-2.0-flash';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+
+    const body = {
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: 'user', parts: [{ text: userContent }] }],
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 4096
+      }
+    };
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`${resp.status}: ${errText.slice(0, 300)}`);
+    }
+    const data = await resp.json();
+    const text = data.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || 'No response from Gemini';
+    return text;
   }
 
   clearChat(): void {
