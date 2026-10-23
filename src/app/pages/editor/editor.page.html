@@ -11,8 +11,7 @@
       <div class="tabs-bar" *ngIf="tabs.length">
         <div class="tab" *ngFor="let tab of tabs"
              [class.active]="tab.id === activeTabId"
-             (click)="activateTab(tab.id)"
-             (swipe)="closeTab(tab.id)">
+             (click)="activateTab(tab.id)">
           <span class="tab-name">{{ tab.name }}</span>
           <span class="dirty" *ngIf="tab.dirty">●</span>
           <button class="tab-close" (click)="closeTab(tab.id, $event)">
@@ -41,7 +40,6 @@
   </header>
 
   <div class="main-area">
-    <!-- SIDEBAR -->
     <aside class="sidebar" [class.collapsed]="!sidebarOpen">
       <div class="sidebar-header">
         <button class="icon-btn sm" (click)="goUp()" [disabled]="!currentDir" title="Up">
@@ -56,9 +54,7 @@
         </button>
       </div>
       <div class="file-list">
-        <div class="file-item" *ngFor="let f of files"
-             (click)="openFile(f)"
-            long-press)="deleteEntry(f, $event)">
+        <div class="file-item" *ngFor="let f of files" (click)="openFile(f)">
           <ion-icon [name]="f.isDirectory ? 'folder-outline' : 'document-outline'"
                     [class.folder]="f.isDirectory"></ion-icon>
           <span class="fname">{{ f.name }}</span>
@@ -70,7 +66,6 @@
       </div>
     </aside>
 
-    <!-- EDITOR + BOTTOM -->
     <div class="editor-zone">
       <div class="monaco-wrap" [class.has-bottom]="bottomPanel !== 'none'">
         <div #editorContainer class="monaco-container"></div>
@@ -81,7 +76,6 @@
         </div>
       </div>
 
-      <!-- BOTTOM PANEL -->
       <div class="bottom-panel" *ngIf="bottomPanel !== 'none'">
         <div class="bottom-tabs">
           <button [class.active]="bottomPanel === 'terminal'" (click)="bottomPanel = 'terminal'">
@@ -104,13 +98,12 @@
       </div>
     </div>
 
-    <!-- AI PANEL -->
     <aside class="ai-panel" [class.open]="aiPanelOpen">
       <div class="ai-header">
         <div class="ai-title">
           <ion-icon name="sparkles-outline"></ion-icon>
           Zeno AI
-          <span class="vision-badge" *ngIf="ai.visionActive$ | async">VISION ACTIVE</span>
+          <span class="vision-badge" *ngIf="ai.visionActive$ | async">{{ selectedProvider | uppercase }}</span>
         </div>
         <div class="ai-actions">
           <button class="icon-btn sm" [class.on]="autoDebug" (click)="toggleAutoDebug()" title="Auto Debug">
@@ -170,11 +163,36 @@
   <ng-template>
     <div class="modal-content dark-modal">
       <h2>Zeno AI Settings</h2>
-      <label>API Key (OpenAI-compatible)</label>
-      <ion-input type="password" [(ngModel)]="apiKeyInput" placeholder="sk-..."></ion-input>
-      <label>API Endpoint</label>
-      <ion-input [(ngModel)]="apiEndpointInput" placeholder="https://api.openai.com/v1/chat/completions"></ion-input>
-      <p class="hint">Works with OpenAI, Groq, Together, local Ollama (via proxy), etc.</p>
+
+      <label>Provider</label>
+      <select class="zeno-select" [(ngModel)]="selectedProvider" (ngModelChange)="onProviderChange($event)">
+        <option value="groq">Groq (default – free & fast)</option>
+        <option value="gemini">Google Gemini (free)</option>
+        <option value="openai">OpenAI / Compatible</option>
+      </select>
+
+      <label>Model</label>
+      <select class="zeno-select" [(ngModel)]="selectedModel">
+        <option *ngFor="let m of availableModels" [value]="m">{{ m }}</option>
+      </select>
+
+      <ng-container *ngIf="selectedProvider === 'groq' || selectedProvider === 'openai'">
+        <label>{{ selectedProvider === 'groq' ? 'Groq API Key' : 'API Key' }}</label>
+        <ion-input type="password" [(ngModel)]="apiKeyInput"
+                   [placeholder]="selectedProvider === 'groq' ? 'gsk_...' : 'sk-...'"></ion-input>
+        <p class="hint" *ngIf="selectedProvider === 'groq'">
+          Free key: <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>
+        </p>
+      </ng-container>
+
+      <ng-container *ngIf="selectedProvider === 'gemini'">
+        <label>Gemini API Key (free)</label>
+        <ion-input type="password" [(ngModel)]="geminiKeyInput" placeholder="AIza..."></ion-input>
+        <p class="hint">
+          Free key: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
+        </p>
+      </ng-container>
+
       <div class="modal-actions">
         <button class="cancel" (click)="settingsOpen = false">Cancel</button>
         <button class="primary-btn" (click)="saveSettings()">Save</button>
