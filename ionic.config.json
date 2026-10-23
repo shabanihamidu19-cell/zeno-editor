@@ -1,0 +1,7 @@
+{
+  "name": "zeno-editor",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular"
+}

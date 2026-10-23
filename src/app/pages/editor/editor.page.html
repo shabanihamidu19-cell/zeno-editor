@@ -1,0 +1,184 @@
+<div class="zeno-root">
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="icon-btn" (click)="sidebarOpen = !sidebarOpen" title="Toggle Files">
+        <ion-icon name="folder-open-outline"></ion-icon>
+      </button>
+      <span class="project-name">{{ projectName }}</span>
+    </div>
+    <div class="topbar-center">
+      <div class="tabs-bar" *ngIf="tabs.length">
+        <div class="tab" *ngFor="let tab of tabs"
+             [class.active]="tab.id === activeTabId"
+             (click)="activateTab(tab.id)"
+             (swipe)="closeTab(tab.id)">
+          <span class="tab-name">{{ tab.name }}</span>
+          <span class="dirty" *ngIf="tab.dirty">●</span>
+          <button class="tab-close" (click)="closeTab(tab.id, $event)">
+            <ion-icon name="close-outline"></ion-icon>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" (click)="saveCurrent()" title="Save (Ctrl+S)">
+        <ion-icon name="save-outline"></ion-icon>
+      </button>
+      <button class="icon-btn run-btn" (click)="runCode()" title="Run">
+        <ion-icon name="play-outline"></ion-icon>
+      </button>
+      <button class="icon-btn" [class.active]="bottomPanel === 'preview'" (click)="togglePreview()" title="Preview">
+        <ion-icon name="eye-outline"></ion-icon>
+      </button>
+      <button class="icon-btn ai-btn" [class.active]="aiPanelOpen" (click)="toggleAiPanel()" title="Zeno AI">
+        <ion-icon name="sparkles-outline"></ion-icon>
+      </button>
+      <button class="icon-btn" (click)="openSettings()" title="Settings">
+        <ion-icon name="settings-outline"></ion-icon>
+      </button>
+    </div>
+  </header>
+
+  <div class="main-area">
+    <!-- SIDEBAR -->
+    <aside class="sidebar" [class.collapsed]="!sidebarOpen">
+      <div class="sidebar-header">
+        <button class="icon-btn sm" (click)="goUp()" [disabled]="!currentDir" title="Up">
+          <ion-icon name="chevron-back-outline"></ion-icon>
+        </button>
+        <span class="dir-label">{{ currentDir || 'Files' }}</span>
+        <button class="icon-btn sm" (click)="openNewFileModal(false)" title="New File">
+          <ion-icon name="add-outline"></ion-icon>
+        </button>
+        <button class="icon-btn sm" (click)="openNewFileModal(true)" title="New Folder">
+          <ion-icon name="folder-outline"></ion-icon>
+        </button>
+      </div>
+      <div class="file-list">
+        <div class="file-item" *ngFor="let f of files"
+             (click)="openFile(f)"
+            long-press)="deleteEntry(f, $event)">
+          <ion-icon [name]="f.isDirectory ? 'folder-outline' : 'document-outline'"
+                    [class.folder]="f.isDirectory"></ion-icon>
+          <span class="fname">{{ f.name }}</span>
+          <button class="del-btn" (click)="deleteEntry(f, $event)">
+            <ion-icon name="trash-outline"></ion-icon>
+          </button>
+        </div>
+        <div class="empty" *ngIf="!files.length">No files yet</div>
+      </div>
+    </aside>
+
+    <!-- EDITOR + BOTTOM -->
+    <div class="editor-zone">
+      <div class="monaco-wrap" [class.has-bottom]="bottomPanel !== 'none'">
+        <div #editorContainer class="monaco-container"></div>
+        <div class="empty-editor" *ngIf="!activeTabId">
+          <ion-icon name="code-slash-outline"></ion-icon>
+          <p>Open a file or create a new one</p>
+          <button class="primary-btn" (click)="openNewFileModal(false)">New File</button>
+        </div>
+      </div>
+
+      <!-- BOTTOM PANEL -->
+      <div class="bottom-panel" *ngIf="bottomPanel !== 'none'">
+        <div class="bottom-tabs">
+          <button [class.active]="bottomPanel === 'terminal'" (click)="bottomPanel = 'terminal'">
+            <ion-icon name="terminal-outline"></ion-icon> Terminal
+          </button>
+          <button [class.active]="bottomPanel === 'preview'" (click)="bottomPanel = 'preview'; updatePreview()">
+            <ion-icon name="eye-outline"></ion-icon> Preview
+          </button>
+          <button class="clear-btn" *ngIf="bottomPanel === 'terminal'" (click)="clearTerminal()">Clear</button>
+          <button class="close-bottom" (click)="bottomPanel = 'none'">
+            <ion-icon name="close-outline"></ion-icon>
+          </button>
+        </div>
+        <div class="terminal-view" *ngIf="bottomPanel === 'terminal'">
+          <pre>{{ terminalOutput || 'Ready. Press Run to execute code.' }}</pre>
+        </div>
+        <div class="preview-view" *ngIf="bottomPanel === 'preview'">
+          <iframe #previewFrame class="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI PANEL -->
+    <aside class="ai-panel" [class.open]="aiPanelOpen">
+      <div class="ai-header">
+        <div class="ai-title">
+          <ion-icon name="sparkles-outline"></ion-icon>
+          Zeno AI
+          <span class="vision-badge" *ngIf="ai.visionActive$ | async">VISION ACTIVE</span>
+        </div>
+        <div class="ai-actions">
+          <button class="icon-btn sm" [class.on]="autoDebug" (click)="toggleAutoDebug()" title="Auto Debug">
+            <ion-icon name="bug-outline"></ion-icon>
+          </button>
+          <button class="icon-btn sm" (click)="ai.clearChat()" title="Clear">
+            <ion-icon name="refresh-outline"></ion-icon>
+          </button>
+          <button class="icon-btn sm" (click)="aiPanelOpen = false">
+            <ion-icon name="close-outline"></ion-icon>
+          </button>
+        </div>
+      </div>
+      <div class="ai-messages">
+        <div class="msg" *ngFor="let m of messages" [class.user]="m.role === 'user'" [class.assistant]="m.role === 'assistant'">
+          <div class="msg-content">{{ m.content }}</div>
+        </div>
+        <div class="msg assistant" *ngIf="isAiProcessing">
+          <ion-spinner name="crescent"></ion-spinner> Thinking...
+        </div>
+        <div class="fix-card" *ngIf="lastFix">
+          <div class="fix-title">Suggested Fix for {{ lastFix.file }}</div>
+          <div class="fix-expl">{{ lastFix.explanation }}</div>
+          <button class="apply-btn" (click)="applyFix()">
+            <ion-icon name="checkmark-outline"></ion-icon> Apply Fix
+          </button>
+        </div>
+      </div>
+      <div class="ai-input-row">
+        <input type="text" [(ngModel)]="aiInput" placeholder="Ask Zeno anything..."
+               (keyup.enter)="sendAiMessage()" [disabled]="isAiProcessing" />
+        <button class="send-btn" (click)="sendAiMessage()" [disabled]="isAiProcessing || !aiInput.trim()">
+          <ion-icon name="sparkles-outline"></ion-icon>
+        </button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- NEW FILE MODAL -->
+<ion-modal [isOpen]="showNewFileModal" (didDismiss)="showNewFileModal = false">
+  <ng-template>
+    <div class="modal-content dark-modal">
+      <h2>{{ isFolder ? 'New Folder' : 'New File' }}</h2>
+      <ion-input [(ngModel)]="newFileName" [placeholder]="isFolder ? 'folder-name' : 'filename.js'"
+                 (keyup.enter)="createNew()"></ion-input>
+      <div class="modal-actions">
+        <button class="cancel" (click)="showNewFileModal = false">Cancel</button>
+        <button class="primary-btn" (click)="createNew()">Create</button>
+      </div>
+    </div>
+  </ng-template>
+</ion-modal>
+
+<!-- SETTINGS MODAL -->
+<ion-modal [isOpen]="settingsOpen" (didDismiss)="settingsOpen = false">
+  <ng-template>
+    <div class="modal-content dark-modal">
+      <h2>Zeno AI Settings</h2>
+      <label>API Key (OpenAI-compatible)</label>
+      <ion-input type="password" [(ngModel)]="apiKeyInput" placeholder="sk-..."></ion-input>
+      <label>API Endpoint</label>
+      <ion-input [(ngModel)]="apiEndpointInput" placeholder="https://api.openai.com/v1/chat/completions"></ion-input>
+      <p class="hint">Works with OpenAI, Groq, Together, local Ollama (via proxy), etc.</p>
+      <div class="modal-actions">
+        <button class="cancel" (click)="settingsOpen = false">Cancel</button>
+        <button class="primary-btn" (click)="saveSettings()">Save</button>
+      </div>
+    </div>
+  </ng-template>
+</ion-modal>
