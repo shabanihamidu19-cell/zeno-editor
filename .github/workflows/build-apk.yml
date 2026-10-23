@@ -37,9 +37,15 @@ jobs:
       - name: Build web assets
         run: npm run build
 
-      - name: Add Capacitor Android platform
+      - name: Prepare Android platform
         run: |
-          if [ ! -f android/app/build.gradle ]; then
+          # Remove incomplete android scaffold if present (only Manifest was committed)
+          if [ -d android ] && [ ! -f android/app/build.gradle ]; then
+            echo "Removing incomplete android folder..."
+            rm -rf android
+          fi
+          if [ ! -d android ]; then
+            echo "Adding Capacitor Android platform..."
             npx cap add android
           fi
 
