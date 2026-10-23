@@ -348,45 +348,152 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
     this.refreshFiles();
   }
 
+  /** Format any value for terminal output */
+  private fmt(v: any): string {
+    if (v === undefined) return 'undefined';
+    if (v === null) return 'null';
+    if (typeof v === 'string') return v;
+    try { return JSON.stringify(v, null, 2); } catch { return String(v); }
+  }
+
+  /**
+   * Execute JavaScript in the WebView (same engine as Chrome/Android System WebView).
+   * Captures console.log / warn / error / info and return value.
+   */
+  private runJavaScript(code: string): void {
+    const logs: string[] = [];
+    const push = (level: string, args: any[]) => {
+      const line = args.map(a => this.fmt(a)).join(' ');
+      logs.push(level ? `[${level}] ${line}` : line);
+    };
+
+    const orig = {
+      log: console.log,
+      warn: console.warn,
+      error: console.error,
+      info: console.info
+    };
+
+    console.log = (...a: any[]) => { push('', a); orig.log.apply(console, a); };
+    console.warn = (...a: any[]) => { push('warn', a); orig.warn.apply(console, a); };
+    console.error = (...a: any[]) => { push('error', a); orig.error.apply(console, a); };
+    console.info = (...a: any[]) => { push('info', a); orig.info.apply(console, a); };
+
+    try {
+      // AsyncFunction supports top-level await in simple scripts
+      // eslint-disable-next-line no-new-func
+      const fn = new Function(`"use strict";\n${code}\n`);
+      const result = fn();
+      if (result !== undefined) logs.push('=> ' + this.fmt(result));
+      if (!logs.length) logs.push('(ran with no console output)');
+      this.terminalOutput += logs.join('\n') + '\nDone\n';
+    } catch (e: any) {
+      this.terminalOutput += 'Error: ' + (e?.message || String(e)) + '\n';
+      if (e?.stack) {
+        const first = String(e.stack).split('\n').slice(0, 3).join('\n');
+        this.terminalOutput += first + '\n';
+      }
+    } finally {
+      console.log = orig.log;
+      console.warn = orig.warn;
+      console.error = orig.error;
+      console.info = orig.info;
+    }
+  }
+
   togglePreview() {
-    if (this.bottomPanel === 'preview') this.bottomPanel = 'none';
-    else { this.bottomPanel = 'preview'; this.updatePreview(); }
+    if (this.bottomPanel === 'preview') {
+      this.bottomPanel = 'none';
+      return;
+    }
+    const tab = this.getActiveTab();
+    // Pure JS/TS: execute in Terminal (do not dump source into Preview)
+    if (tab && (tab.language === 'javascript' || tab.language === 'typescript')) {
+      this.bottomPanel = 'terminal';
+      this.terminalOutput += `\n$ run ${tab.name}\n`;
+      this.runJavaScript(tab.content);
+      return;
+    }
+    this.bottomPanel = 'preview';
+    this.updatePreview();
   }
 
   async updatePreview() {
     const tab = this.getActiveTab();
     if (!tab) return;
-    let html = tab.language === 'html' ? tab.content : `<pre>${tab.content}</pre>`;
+
+    let html = '';
+    if (tab.language === 'html') {
+      html = tab.content;
+      // Inline open CSS/JS tabs so preview works without a server
+      try {
+        const all = await this.fs.getAllProjectFiles(this.currentDir || '');
+        let css = '';
+        let js = '';
+        for (const f of all) {
+          const ext = f.path.split('.').pop()?.toLowerCase();
+          if (ext === 'css') css += f.content + '\n';
+          if (ext === 'js') js += f.content + '\n';
+        }
+        if (css) {
+          html = html.includes('</head>')
+            ? html.replace('</head>', `<style>${css}</style></head>`)
+            : `<style>${css}</style>` + html;
+        }
+        if (js) {
+          html = html.includes('</body>')
+            ? html.replace('</body>', `<script>${js}<\/script></body>`)
+            : html + `<script>${js}<\/script>`;
+        }
+      } catch { /* ignore */ }
+    } else if (tab.language === 'css') {
+      html = `<!DOCTYPE html><html><head><style>${tab.content}</style></head>
+<body><div class="box">CSS preview</div>
+<style>body{margin:24px;font-family:system-ui;background:#111;color:#eee}.box{padding:24px;border:2px dashed #00ff88;border-radius:12px}</style>
+</body></html>`;
+    } else {
+      // Fallback: show as preformatted text (markdown etc.)
+      const escaped = tab.content
+        .replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+      html = `<!DOCTYPE html><html><body style="margin:0;background:#0e0e10;color:#e0e0e0;font-family:ui-monospace,monospace;padding:12px"><pre style="margin:0;white-space:pre-wrap">${escaped}</pre></body></html>`;
+    }
+
     setTimeout(() => {
-      const iframe = this.previewFrame?.nativeElement;
-      if (iframe) {
-        const doc = iframe.contentDocument || iframe.contentWindow?.document;
-        if (doc) { doc.open(); doc.write(html); doc.close(); }
-      }
+      const iframe = this.previewFrame?.nativeElement as HTMLIFrameElement | undefined;
+      if (!iframe) return;
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (!doc) return;
+      doc.open();
+      doc.write(html);
+      doc.close();
     }, 40);
   }
 
   async runCode() {
     const tab = this.getActiveTab();
     if (!tab) return;
+
+    // Sync content from editor
+    if (this.editor && this.activeTabId === tab.id) {
+      tab.content = this.editor.getValue();
+    }
+
+    if (tab.language === 'html') {
+      this.bottomPanel = 'preview';
+      this.updatePreview();
+      return;
+    }
+
     this.bottomPanel = 'terminal';
     this.terminalOutput += `\n$ run ${tab.name}\n`;
+
     if (tab.language === 'javascript' || tab.language === 'typescript') {
-      try {
-        const logs: string[] = [];
-        const o = console.log;
-        console.log = (...a: any[]) => { logs.push(a.map(x => typeof x === 'object' ? JSON.stringify(x) : String(x)).join(' ')); o.apply(console, a); };
-        const result = eval(tab.content);
-        console.log = o;
-        if (logs.length) this.terminalOutput += logs.join('\n') + '\n';
-        if (result !== undefined) this.terminalOutput += '=> ' + String(result) + '\n';
-        this.terminalOutput += 'Done\n';
-      } catch (e: any) { this.terminalOutput += 'Error: ' + (e.message || e) + '\n'; }
+      this.runJavaScript(tab.content);
     } else if (tab.language === 'python') {
       await this.runPython(tab.content);
-    } else if (tab.language === 'html') {
-      this.bottomPanel = 'preview'; this.updatePreview();
-    } else this.terminalOutput += `Cannot run ${tab.language}\n`;
+    } else {
+      this.terminalOutput += `Cannot run ${tab.language}. Supported: JS, TS, Python, HTML.\n`;
+    }
   }
 
   private async loadPyodide() {
@@ -405,7 +512,7 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
   private async runPython(code: string) {
     if (!this.pyodideReady) {
       if (!this.pyodide) this.loadPyodide();
-      this.terminalOutput += 'Pyodide loading... try again shortly.\n';
+      this.terminalOutput += 'Pyodide loading... press Run again in a few seconds.\n';
       return;
     }
     try {
@@ -424,9 +531,11 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
     let markers: any[] = [];
     if (this.editor && tab?.model) markers = monaco.editor.getModelMarkers({ resource: tab.model.uri });
     return {
-      context: 'Full project', currentFile: tab?.path || '',
+      context: 'Full project',
+      currentFile: tab?.path || '',
       currentCode: tab?.content || this.editor?.getValue() || '',
-      errorMarkers: markers, terminalOutput: this.terminalOutput.slice(-2000),
+      errorMarkers: markers,
+      terminalOutput: this.terminalOutput.slice(-2000),
       userGoal: this.aiInput || 'analyze and fix'
     };
   }
@@ -476,7 +585,7 @@ export class EditorPage implements OnInit, AfterViewInit, OnDestroy {
     if (this.selectedProvider === 'gemini') this.ai.setGeminiKey(this.geminiKeyInput);
     else this.ai.setApiKey(this.apiKeyInput);
     this.settingsOpen = false;
-    this.showToast(`Saved: ${this.selectedProvider}`);
+    this.showToast('Saved: ' + this.selectedProvider);
   }
 
   private async showToast(msg: string) {
