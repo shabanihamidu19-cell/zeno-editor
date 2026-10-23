@@ -20,7 +20,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # no cache: package-lock.json is not committed yet
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -28,8 +27,17 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      # Google removed the deprecated "tools" package. v3 fails with:
+      # "Failed to find package 'tools'". Use v4 + explicit packages.
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+
+      - name: Install Android SDK packages for Capacitor
+        run: |
+          sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
+          yes | sdkmanager --licenses || true
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
