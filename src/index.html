@@ -11,6 +11,8 @@
   <link rel="icon" type="image/png" href="assets/icon/favicon.png" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <!-- Monaco editor styles (CDN avoids bundling .ttf fonts with esbuild) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/editor/editor.main.css" />
   <style>
     html, body { background: #0e0e10; margin: 0; height: 100%; }
   </style>
