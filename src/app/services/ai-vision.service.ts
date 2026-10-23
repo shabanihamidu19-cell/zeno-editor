@@ -28,25 +28,56 @@ export interface AiFix {
   explanation: string;
 }
 
+/**
+ * Model IDs from official docs (checked Oct 2026):
+ * - Groq: https://console.groq.com/docs/models
+ * - Gemini: https://ai.google.dev/gemini-api/docs (free-tier Flash / Flash-Lite)
+ */
 export const AI_PROVIDERS: Record<AiProvider, { label: string; endpoint: string; models: string[]; defaultModel: string; free?: boolean }> = {
   groq: {
     label: 'Groq (default, free tier)',
     endpoint: 'https://api.groq.com/openai/v1/chat/completions',
-    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
-    defaultModel: 'llama-3.3-70b-versatile',
+    models: [
+      // Production chat (Groq docs)
+      'llama-3.1-8b-instant',
+      'llama-3.3-70b-versatile',
+      'openai/gpt-oss-20b',
+      'openai/gpt-oss-120b',
+      // Also commonly available on free/dev plans
+      'qwen/qwen3.8-27b',
+      'allam-2-7b'
+    ],
+    defaultModel: 'llama-3.1-8b-instant',
     free: true
   },
   gemini: {
-    label: 'Google Gemini (free)',
+    label: 'Google Gemini (free tier)',
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
-    models: ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'],
-    defaultModel: 'gemini-2.0-flash',
+    models: [
+      // Free of charge on Gemini API free tier (docs / pricing, Oct 2026)
+      'gemini-3.8-flash',
+      'gemini-3.6-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-2.5-pro',
+      // Legacy aliases still accepted by many projects
+      'gemini-2.0-flash',
+      'gemini-1.5-flash'
+    ],
+    defaultModel: 'gemini-3.8-flash',
     free: true
   },
   openai: {
     label: 'OpenAI / Compatible',
     endpoint: 'https://api.openai.com/v1/chat/completions',
-    models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
+    models: [
+      'gpt-4o-mini',
+      'gpt-4o',
+      'gpt-4.1-mini',
+      'gpt-4.1',
+      'gpt-3.5-turbo'
+    ],
     defaultModel: 'gpt-4o-mini'
   }
 };
@@ -94,7 +125,6 @@ export class AiVisionService {
     this.provider = p;
     this.provider$.next(p);
     localStorage.setItem('zeno_ai_provider', p);
-    // reset model to provider default if current model not in list
     if (!AI_PROVIDERS[p].models.includes(this.model)) {
       this.setModel(AI_PROVIDERS[p].defaultModel);
     }
@@ -132,7 +162,6 @@ export class AiVisionService {
     }, 1500);
   }
 
-  // ========== LAYER 1: OFFLINE LINTER ==========
   runOfflineLinter(ctx: AiContext): { fixed: boolean; message: string; newCode?: string } {
     const code = ctx.currentCode;
     const file = ctx.currentFile || '';
@@ -192,7 +221,6 @@ export class AiVisionService {
     return result;
   }
 
-  // ========== LAYER 2: ONLINE AI ==========
   async askAi(userMessage: string, ctx: AiContext): Promise<string> {
     this.isProcessing$.next(true);
     const messages = this.messages$.value;
@@ -317,7 +345,7 @@ USER REQUEST: ${userMessage}`;
   }
 
   private async callGemini(key: string, systemPrompt: string, userContent: string): Promise<string> {
-    const model = this.model || 'gemini-2.0-flash';
+    const model = this.model || 'gemini-3.8-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
 
     const body = {
