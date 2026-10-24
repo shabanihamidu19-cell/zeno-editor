@@ -193,14 +193,12 @@
   height: 100%;
 }
 
-/* Dense Spck-like Monaco */
+/* Monaco + mobile suggest widget */
 :host ::ng-deep {
   .monaco-editor, .monaco-editor-background, .monaco-editor .margin {
     background-color: #0e0e10 !important;
   }
-  .monaco-editor .view-lines {
-    line-height: 22px !important;
-  }
+  .monaco-editor .view-lines,
   .monaco-editor .view-line {
     line-height: 22px !important;
   }
@@ -214,6 +212,40 @@
   .monaco-editor .mtk11 { color: #c586c0; }
   .monaco-editor .mtk12 { color: #6a9955; }
   .monaco-editor .cursor { background: #00ff88 !important; border-color: #00ff88 !important; }
+  .monaco-editor .selected-text { background: rgba(0, 255, 136, 0.28) !important; }
+  .monaco-editor .focused .selected-text { background: rgba(0, 255, 136, 0.35) !important; }
+
+  /* LARGE touch-friendly autocomplete popup */
+  .monaco-editor .suggest-widget {
+    width: min(92vw, 340px) !important;
+    max-width: 92vw !important;
+    border: 1px solid #3a3a44 !important;
+    border-radius: 12px !important;
+    background: #1e1e24 !important;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.55) !important;
+    z-index: 100 !important;
+  }
+  .monaco-editor .suggest-widget .monaco-list .monaco-list-row {
+    min-height: 44px !important;
+    padding: 8px 12px !important;
+    font-size: 15px !important;
+    line-height: 1.3 !important;
+  }
+  .monaco-editor .suggest-widget .monaco-list .monaco-list-row.focused {
+    background: rgba(0, 255, 136, 0.18) !important;
+    color: #fff !important;
+  }
+  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .label-name {
+    font-size: 15px !important;
+  }
+  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .label-description,
+  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .details-label {
+    font-size: 12px !important;
+    color: #9a9aa3 !important;
+  }
+  .monaco-editor .suggest-widget .suggest-status-bar {
+    display: none !important;
+  }
 }
 
 .empty-editor {
@@ -229,7 +261,6 @@
   p { margin: 0; font-size: 15px; }
 }
 
-/* Spck-style symbol toolbar */
 .symbol-bar {
   background: #151518;
   border-top: 1px solid var(--zeno-border);
@@ -257,6 +288,12 @@
   font-family: ui-monospace, monospace;
   font-weight: 600;
   &:active { background: var(--zeno-accent); color: #000; }
+  &.suggest-btn {
+    min-width: 48px;
+    background: rgba(0, 255, 136, 0.15);
+    color: var(--zeno-accent);
+    font-size: 13px;
+  }
 }
 
 .nav-row {
@@ -264,11 +301,12 @@
   gap: 4px;
   padding: 4px 8px 8px;
   justify-content: center;
+  align-items: center;
 }
 
 .nav {
   flex: 1;
-  max-width: 56px;
+  max-width: 52px;
   height: 36px;
   border: none;
   border-radius: 8px;
@@ -281,6 +319,12 @@
   font-weight: 600;
   ion-icon { font-size: 18px; }
   &:active { background: var(--zeno-accent); color: #000; }
+  &.suggest-nav {
+    max-width: 64px;
+    background: rgba(0, 255, 136, 0.15);
+    color: var(--zeno-accent);
+    font-size: 12px;
+  }
 }
 
 .bottom-panel {
